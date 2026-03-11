@@ -82,6 +82,12 @@ db.exec(`
   );
 `);
 
+// Insert default admin if no users exist
+const userCount = db.prepare('SELECT COUNT(*) as count FROM users').get() as { count: number };
+if (userCount.count === 0) {
+  db.prepare('INSERT INTO users (username, password, role, full_name) VALUES (?, ?, ?, ?)').run('admin', 'admin', 'admin', 'System Administrator');
+}
+
 // Helper to log events
 const logEvent = (userId: any, userName: any, action: string, entityType: string, entityId: any, details: string) => {
   try {
