@@ -257,16 +257,23 @@ export default function App() {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    const res = await fetch('/api/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(loginForm)
-    });
-    if (res.ok) {
-      setUser(await res.json());
-      showNotification('Logged in successfully');
-    } else {
-      showNotification('Invalid credentials', 'error');
+    try {
+      const res = await fetch('/api/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(loginForm)
+      });
+      
+      if (res.ok) {
+        const data = await res.json();
+        setUser(data);
+        showNotification('Logged in successfully');
+      } else {
+        showNotification('Invalid credentials', 'error');
+      }
+    } catch (error) {
+      console.error('Login error:', error);
+      showNotification('Connection error or invalid response', 'error');
     }
   };
 
