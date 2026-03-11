@@ -1,0 +1,16 @@
+version: '3.8'
+
+services:
+  ledgerflow:
+    build: .
+    ports:
+      - "4030:3000"
+    volumes:
+      - ledgerflow_data:/app/data
+    environment:
+      - NODE_ENV=production
+      - DB_PATH=/app/data/accounting.db
+    restart: always
+
+volumes:
+  ledgerflow_data:

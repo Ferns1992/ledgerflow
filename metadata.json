@@ -1,0 +1,5 @@
+{
+  "name": "LedgerFlow Accounting",
+  "description": "A professional accounting application with ledger management, company creation, and multi-user roles.",
+  "requestFramePermissions": []
+}
