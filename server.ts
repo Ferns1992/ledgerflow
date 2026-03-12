@@ -396,6 +396,9 @@ async function startServer() {
     db.prepare('DELETE FROM transactions WHERE company_id = ?').run(id);
     db.prepare('DELETE FROM ledgers WHERE company_id = ?').run(id);
     db.prepare('DELETE FROM assets WHERE company_id = ?').run(id);
+    db.prepare('DELETE FROM grns WHERE company_id = ?').run(id);
+    db.prepare('DELETE FROM purchase_orders WHERE company_id = ?').run(id);
+    db.prepare('DELETE FROM taxes WHERE company_id = ?').run(id);
     db.prepare('DELETE FROM companies WHERE id = ?').run(id);
     logEvent(userId, userName, 'DELETE', 'COMPANY', id, `Deleted company ID: ${id}`);
     res.json({ success: true });
@@ -479,6 +482,66 @@ async function startServer() {
     db.prepare('DELETE FROM grns WHERE id = ?').run(req.params.id);
     logEvent(userId, userName, 'DELETE', 'GRN', req.params.id, `Deleted GRN ID: ${req.params.id}`);
     res.json({ success: true });
+  });
+
+  // --- Auto-numbering ---
+  app.get('/api/next-number/po', (req, res) => {
+    try {
+      const { company_id, type } = req.query;
+      if (!company_id) return res.status(400).json({ error: 'company_id is required' });
+      
+      const prefix = type === 'LPO' ? 'LPO' : 'IPO';
+      const allPOs = db.prepare('SELECT po_number FROM purchase_orders WHERE company_id = ? AND type = ?').all(company_id, type) as { po_number: string }[];
+      
+      let maxNum = 0;
+      allPOs.forEach(po => {
+        if (po.po_number) {
+          const match = po.po_number.match(/(\d+)$/);
+          if (match) {
+            const num = parseInt(match[1]);
+            if (!isNaN(num) && num > maxNum) maxNum = num;
+          }
+        }
+      });
+      
+      const nextNum = maxNum + 1;
+      const year = new Date().getFullYear();
+      const nextNumber = `${prefix}-${year}-${nextNum.toString().padStart(4, '0')}`;
+      console.log(`Generated next PO number: ${nextNumber} for company: ${company_id}, type: ${type}`);
+      res.json({ nextNumber });
+    } catch (error) {
+      console.error('Error generating next PO number:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  app.get('/api/next-number/grn', (req, res) => {
+    try {
+      const { company_id } = req.query;
+      if (!company_id) return res.status(400).json({ error: 'company_id is required' });
+      
+      const allGRNs = db.prepare('SELECT grn_number FROM grns WHERE company_id = ?').all(company_id) as { grn_number: string }[];
+      
+      let maxNum = 0;
+      allGRNs.forEach(grn => {
+        if (grn.grn_number) {
+          const match = grn.grn_number.match(/(\d+)$/);
+          if (match) {
+            const num = parseInt(match[1]);
+            if (!isNaN(num) && num > maxNum) maxNum = num;
+          }
+        }
+      });
+      
+      const nextNum = maxNum + 1;
+      const year = new Date().getFullYear();
+      const nextNumber = `GRN-${year}-${nextNum.toString().padStart(4, '0')}`;
+      console.log(`Generated next GRN number: ${nextNumber} for company: ${company_id}`);
+      res.json({ nextNumber });
+    } catch (error) {
+      console.error('Error generating next GRN number:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
   });
 
   // --- Inter-Company Transfers ---

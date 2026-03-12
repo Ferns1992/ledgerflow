@@ -981,7 +981,7 @@ function LedgersView({ ledgers, companies, onRefresh, currentCompany, currentUse
                 { value: 'Capital Account', label: 'Capital Account' },
               ]}
             />
-            <Input label="Opening Balance" type="number" value={form.opening_balance} onChange={e => setForm({...form, opening_balance: Number(e.target.value)})} className="dark:bg-zinc-800 dark:border-zinc-700 dark:text-white" />
+            <Input label="Opening Balance" type="number" value={form.opening_balance} onChange={e => setForm({...form, opening_balance: Number(e.target.value) || 0})} className="dark:bg-zinc-800 dark:border-zinc-700 dark:text-white" />
             <div className="md:col-span-3 flex justify-end gap-2">
               <Button variant="outline" onClick={() => { setShowAdd(false); setEditingId(null); setForm({ name: '', group_name: 'Direct Expenses', opening_balance: 0 }); }} className="dark:border-zinc-700 dark:text-zinc-300">Cancel</Button>
               <Button type="submit" className="dark:bg-white dark:text-zinc-900">{editingId ? 'Update Ledger' : 'Save Ledger'}</Button>
@@ -1279,7 +1279,7 @@ function VouchersView({ transactions, ledgers, taxes, companies, onRefresh, curr
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <Input label="Amount" type="number" value={form.amount} onChange={e => {
-                const amount = Number(e.target.value);
+                const amount = Number(e.target.value) || 0;
                 setForm({...form, amount, tax_amount: form.tax_id ? amount * (taxes.find(t => t.id === Number(form.tax_id))?.rate || 0) / 100 : 0});
               }} required className="dark:bg-zinc-800 dark:border-zinc-700 dark:text-white" />
               <Select 
@@ -1549,9 +1549,9 @@ function AssetsView({ assets, companies, onRefresh, currentCompany, currentUser,
         <Card className="p-6 border-zinc-900/20 bg-zinc-50/50 dark:bg-zinc-900 dark:border-zinc-800">
           <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
             <Input label="Asset Name" value={form.name} onChange={e => setForm({...form, name: e.target.value})} required className="dark:bg-zinc-800 dark:border-zinc-700 dark:text-white" />
-            <Input label="Value" type="number" value={form.value} onChange={e => setForm({...form, value: Number(e.target.value)})} required className="dark:bg-zinc-800 dark:border-zinc-700 dark:text-white" />
+            <Input label="Value" type="number" value={form.value} onChange={e => setForm({...form, value: Number(e.target.value) || 0})} required className="dark:bg-zinc-800 dark:border-zinc-700 dark:text-white" />
             <Input label="Purchase Date" type="date" value={form.purchase_date} onChange={e => setForm({...form, purchase_date: e.target.value})} required className="dark:bg-zinc-800 dark:border-zinc-700 dark:text-white" />
-            <Input label="Depreciation %" type="number" value={form.depreciation_rate} onChange={e => setForm({...form, depreciation_rate: Number(e.target.value)})} className="dark:bg-zinc-800 dark:border-zinc-700 dark:text-white" />
+            <Input label="Depreciation %" type="number" value={form.depreciation_rate} onChange={e => setForm({...form, depreciation_rate: Number(e.target.value) || 0})} className="dark:bg-zinc-800 dark:border-zinc-700 dark:text-white" />
             <div className="md:col-span-4 flex justify-end gap-2">
               <Button variant="outline" onClick={() => { setShowAdd(false); setEditingId(null); }} className="dark:border-zinc-700 dark:text-zinc-300">Cancel</Button>
               <Button type="submit" className="dark:bg-white dark:text-zinc-900">{editingId ? 'Update Asset' : 'Save Asset'}</Button>
@@ -1747,6 +1747,36 @@ function PurchaseOrdersView({ pos, type, onRefresh, currentCompany, currentUser,
   const [form, setForm] = useState({ po_number: '', date: new Date().toISOString().split('T')[0], supplier: '', status: 'Pending', items: [] as POItem[] });
   const [newItem, setNewItem] = useState({ description: '', quantity: 1, rate: 0, amount: 0 });
 
+  useEffect(() => {
+    let isMounted = true;
+    if (showAdd && !editingId && currentCompany?.id) {
+      console.log(`[PO] Fetching next number for company ${currentCompany.id}, type ${type}`);
+      setForm(f => ({ ...f, po_number: 'Generating...' }));
+      
+      const fetchNextNumber = async () => {
+        try {
+          const res = await fetch(`/api/next-number/po?company_id=${currentCompany.id}&type=${type}`);
+          if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+          const data = await res.json();
+          
+          if (isMounted) {
+            console.log(`[PO] Received: ${data.nextNumber}`);
+            setForm(f => ({ ...f, po_number: data.nextNumber || '' }));
+          }
+        } catch (err) {
+          console.error('[PO] Error:', err);
+          if (isMounted) {
+            setForm(f => ({ ...f, po_number: '' }));
+            showNotification("Failed to auto-generate PO number. Please enter manually.", "error");
+          }
+        }
+      };
+
+      fetchNextNumber();
+    }
+    return () => { isMounted = false; };
+  }, [showAdd, editingId, currentCompany?.id, type]);
+
   const filteredPos = pos.filter(p => p.type === type);
 
   const handleAddItem = () => {
@@ -1843,7 +1873,17 @@ function PurchaseOrdersView({ pos, type, onRefresh, currentCompany, currentUser,
         <Card className="p-6 border-zinc-900/20 bg-zinc-50/50 dark:bg-zinc-900 dark:border-zinc-800">
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <Input label="PO Number" value={form.po_number} onChange={e => setForm({...form, po_number: e.target.value})} required className="dark:bg-zinc-800 dark:border-zinc-700 dark:text-white" />
+              <Input 
+                label="PO Number" 
+                value={form.po_number} 
+                onChange={e => setForm({...form, po_number: e.target.value})} 
+                required 
+                readOnly={form.po_number === 'Generating...'}
+                className={cn(
+                  "dark:bg-zinc-800 dark:border-zinc-700 dark:text-white",
+                  form.po_number === 'Generating...' && "animate-pulse text-zinc-400"
+                )} 
+              />
               <Input label="Date" type="date" value={form.date} onChange={e => setForm({...form, date: e.target.value})} required className="dark:bg-zinc-800 dark:border-zinc-700 dark:text-white" />
               <Input label="Supplier" value={form.supplier} onChange={e => setForm({...form, supplier: e.target.value})} required className="dark:bg-zinc-800 dark:border-zinc-700 dark:text-white" />
               <Select 
@@ -1861,8 +1901,8 @@ function PurchaseOrdersView({ pos, type, onRefresh, currentCompany, currentUser,
                 <div className="md:col-span-2">
                   <Input label="Description" value={newItem.description} onChange={e => setNewItem({...newItem, description: e.target.value})} className="dark:bg-zinc-800 dark:border-zinc-700 dark:text-white" />
                 </div>
-                <Input label="Qty" type="number" value={newItem.quantity} onChange={e => setNewItem({...newItem, quantity: Number(e.target.value)})} className="dark:bg-zinc-800 dark:border-zinc-700 dark:text-white" />
-                <Input label="Rate" type="number" step="0.01" value={newItem.rate} onChange={e => setNewItem({...newItem, rate: Number(e.target.value)})} className="dark:bg-zinc-800 dark:border-zinc-700 dark:text-white" />
+                <Input label="Qty" type="number" value={newItem.quantity} onChange={e => setNewItem({...newItem, quantity: Number(e.target.value) || 0})} className="dark:bg-zinc-800 dark:border-zinc-700 dark:text-white" />
+                <Input label="Rate" type="number" step="0.01" value={newItem.rate} onChange={e => setNewItem({...newItem, rate: Number(e.target.value) || 0})} className="dark:bg-zinc-800 dark:border-zinc-700 dark:text-white" />
                 <Button type="button" variant="outline" onClick={handleAddItem} className="dark:border-zinc-700 dark:text-zinc-300">Add Item</Button>
               </div>
               
@@ -1965,6 +2005,36 @@ function GRNsView({ grns, pos, onRefresh, currentCompany, currentUser, showNotif
   const [form, setForm] = useState({ grn_number: '', date: new Date().toISOString().split('T')[0], po_id: '', supplier: '', status: 'Received', items: [] as GRNItem[] });
   const [newItem, setNewItem] = useState({ description: '', quantity: 1, rate: 0, amount: 0 });
 
+  useEffect(() => {
+    let isMounted = true;
+    if (showAdd && !editingId && currentCompany?.id) {
+      console.log(`[GRN] Fetching next number for company ${currentCompany.id}`);
+      setForm(f => ({ ...f, grn_number: 'Generating...' }));
+      
+      const fetchNextNumber = async () => {
+        try {
+          const res = await fetch(`/api/next-number/grn?company_id=${currentCompany.id}`);
+          if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+          const data = await res.json();
+          
+          if (isMounted) {
+            console.log(`[GRN] Received: ${data.nextNumber}`);
+            setForm(f => ({ ...f, grn_number: data.nextNumber || '' }));
+          }
+        } catch (err) {
+          console.error('[GRN] Error:', err);
+          if (isMounted) {
+            setForm(f => ({ ...f, grn_number: '' }));
+            showNotification("Failed to auto-generate GRN number. Please enter manually.", "error");
+          }
+        }
+      };
+
+      fetchNextNumber();
+    }
+    return () => { isMounted = false; };
+  }, [showAdd, editingId, currentCompany?.id]);
+
   const handleAddItem = () => {
     if (newItem.description && newItem.quantity > 0 && newItem.rate >= 0) {
       setForm({ ...form, items: [...form.items, { ...newItem, amount: newItem.quantity * newItem.rate }] });
@@ -2058,7 +2128,17 @@ function GRNsView({ grns, pos, onRefresh, currentCompany, currentUser, showNotif
         <Card className="p-6 border-zinc-900/20 bg-zinc-50/50 dark:bg-zinc-900 dark:border-zinc-800">
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <Input label="GRN Number" value={form.grn_number} onChange={e => setForm({...form, grn_number: e.target.value})} required className="dark:bg-zinc-800 dark:border-zinc-700 dark:text-white" />
+              <Input 
+                label="GRN Number" 
+                value={form.grn_number} 
+                onChange={e => setForm({...form, grn_number: e.target.value})} 
+                required 
+                readOnly={form.grn_number === 'Generating...'}
+                className={cn(
+                  "dark:bg-zinc-800 dark:border-zinc-700 dark:text-white",
+                  form.grn_number === 'Generating...' && "animate-pulse text-zinc-400"
+                )}
+              />
               <Input label="Date" type="date" value={form.date} onChange={e => setForm({...form, date: e.target.value})} required className="dark:bg-zinc-800 dark:border-zinc-700 dark:text-white" />
               <Select 
                 label="PO Reference" 
@@ -2084,8 +2164,8 @@ function GRNsView({ grns, pos, onRefresh, currentCompany, currentUser, showNotif
                 <div className="md:col-span-2">
                   <Input label="Description" value={newItem.description} onChange={e => setNewItem({...newItem, description: e.target.value})} className="dark:bg-zinc-800 dark:border-zinc-700 dark:text-white" />
                 </div>
-                <Input label="Qty" type="number" value={newItem.quantity} onChange={e => setNewItem({...newItem, quantity: Number(e.target.value)})} className="dark:bg-zinc-800 dark:border-zinc-700 dark:text-white" />
-                <Input label="Rate" type="number" step="0.01" value={newItem.rate} onChange={e => setNewItem({...newItem, rate: Number(e.target.value)})} className="dark:bg-zinc-800 dark:border-zinc-700 dark:text-white" />
+                <Input label="Qty" type="number" value={newItem.quantity} onChange={e => setNewItem({...newItem, quantity: Number(e.target.value) || 0})} className="dark:bg-zinc-800 dark:border-zinc-700 dark:text-white" />
+                <Input label="Rate" type="number" step="0.01" value={newItem.rate} onChange={e => setNewItem({...newItem, rate: Number(e.target.value) || 0})} className="dark:bg-zinc-800 dark:border-zinc-700 dark:text-white" />
                 <Button type="button" variant="outline" onClick={handleAddItem} className="dark:border-zinc-700 dark:text-zinc-300">Add Item</Button>
               </div>
               
@@ -2271,7 +2351,7 @@ function TaxesView({ taxes, onRefresh, currentCompany, currentUser, showNotifica
               ]}
             />
             <Input label="Tax Name" value={form.name} onChange={e => setForm({...form, name: e.target.value})} required className="dark:bg-zinc-800 dark:border-zinc-700 dark:text-white" />
-            <Input label="Rate (%)" type="number" step="0.01" value={form.rate} onChange={e => setForm({...form, rate: parseFloat(e.target.value)})} required className="dark:bg-zinc-800 dark:border-zinc-700 dark:text-white" />
+            <Input label="Rate (%)" type="number" step="0.01" value={form.rate} onChange={e => setForm({...form, rate: parseFloat(e.target.value) || 0})} required className="dark:bg-zinc-800 dark:border-zinc-700 dark:text-white" />
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={() => { setShowAdd(false); setEditingId(null); setForm({ name: '', rate: 0 }); }} className="dark:border-zinc-700 dark:text-zinc-300">Cancel</Button>
               <Button type="submit" className="dark:bg-white dark:text-zinc-900">{editingId ? 'Update Tax' : 'Save Tax'}</Button>
@@ -2362,7 +2442,7 @@ function CompaniesView({ companies, onRefresh, currentUser, showNotification, ha
   const handleDelete = async (id: number) => {
     handleConfirm(
       "Delete Company",
-      "Are you sure you want to delete this company? This will delete ALL associated data (ledgers, vouchers, assets).",
+      "Are you sure you want to delete this company? This action is IRREVERSIBLE and will permanently delete ALL associated data, including ledgers, vouchers, assets, purchase orders, and GRNs.",
       async () => {
         const res = await fetch(`/api/companies/${id}?userId=${currentUser?.id}&userName=${currentUser?.username}`, { method: 'DELETE' });
         if (res.ok) {
@@ -2518,7 +2598,7 @@ function CompaniesView({ companies, onRefresh, currentUser, showNotification, ha
                     ]}
                   />
                   <Input label="Manual Tax Name" value={newTax.name} onChange={e => setNewTax({...newTax, name: e.target.value})} className="dark:bg-zinc-800 dark:border-zinc-700 dark:text-white" />
-                  <Input label="Rate (%)" type="number" step="0.01" value={newTax.rate} onChange={e => setNewTax({...newTax, rate: parseFloat(e.target.value)})} className="dark:bg-zinc-800 dark:border-zinc-700 dark:text-white" />
+                  <Input label="Rate (%)" type="number" step="0.01" value={newTax.rate} onChange={e => setNewTax({...newTax, rate: parseFloat(e.target.value) || 0})} className="dark:bg-zinc-800 dark:border-zinc-700 dark:text-white" />
                   <Button type="button" variant="outline" onClick={handleAddTax} className="dark:border-zinc-700 dark:text-zinc-300">Add Tax</Button>
                 </div>
                 
