@@ -70,6 +70,33 @@ db.exec(`
     FOREIGN KEY(company_id) REFERENCES companies(id)
   );
 
+  CREATE TABLE IF NOT EXISTS purchase_orders (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    company_id INTEGER,
+    type TEXT,
+    po_number TEXT,
+    date TEXT,
+    supplier TEXT,
+    total_amount REAL,
+    status TEXT DEFAULT 'Pending',
+    items TEXT,
+    FOREIGN KEY(company_id) REFERENCES companies(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS grns (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    company_id INTEGER,
+    grn_number TEXT,
+    date TEXT,
+    po_id INTEGER,
+    supplier TEXT,
+    total_amount REAL,
+    status TEXT DEFAULT 'Received',
+    items TEXT,
+    FOREIGN KEY(company_id) REFERENCES companies(id),
+    FOREIGN KEY(po_id) REFERENCES purchase_orders(id)
+  );
+
   CREATE TABLE IF NOT EXISTS event_logs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER,
@@ -393,6 +420,86 @@ async function startServer() {
     const { userId, userName } = req.query;
     db.prepare('DELETE FROM assets WHERE id = ?').run(req.params.id);
     logEvent(userId, userName, 'DELETE', 'ASSET', req.params.id, `Deleted asset ID: ${req.params.id}`);
+    res.json({ success: true });
+  });
+
+  // --- Purchase Orders (LPO/IPO) ---
+  app.get('/api/purchase-orders', (req, res) => {
+    const { company_id } = req.query;
+    if (!company_id) return res.json([]);
+    const pos = db.prepare('SELECT * FROM purchase_orders WHERE company_id = ? ORDER BY date DESC').all(company_id);
+    res.json(pos);
+  });
+
+  app.post('/api/purchase-orders', (req, res) => {
+    const { company_id, type, po_number, date, supplier, total_amount, status, items, userId, userName } = req.body;
+    const result = db.prepare('INSERT INTO purchase_orders (company_id, type, po_number, date, supplier, total_amount, status, items) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').run(company_id, type, po_number, date, supplier, total_amount, status || 'Pending', JSON.stringify(items));
+    logEvent(userId, userName, 'CREATE', 'PURCHASE_ORDER', result.lastInsertRowid as number, `Created ${type}: ${po_number}`);
+    res.json({ id: result.lastInsertRowid });
+  });
+
+  app.put('/api/purchase-orders/:id', (req, res) => {
+    const { type, po_number, date, supplier, total_amount, status, items, userId, userName } = req.body;
+    db.prepare('UPDATE purchase_orders SET type = ?, po_number = ?, date = ?, supplier = ?, total_amount = ?, status = ?, items = ? WHERE id = ?').run(type, po_number, date, supplier, total_amount, status, JSON.stringify(items), req.params.id);
+    logEvent(userId, userName, 'UPDATE', 'PURCHASE_ORDER', Number(req.params.id), `Updated ${type}: ${po_number}`);
+    res.json({ success: true });
+  });
+
+  app.delete('/api/purchase-orders/:id', (req, res) => {
+    const { userId, userName } = req.query;
+    db.prepare('DELETE FROM purchase_orders WHERE id = ?').run(req.params.id);
+    logEvent(userId, userName, 'DELETE', 'PURCHASE_ORDER', req.params.id, `Deleted PO ID: ${req.params.id}`);
+    res.json({ success: true });
+  });
+
+  // --- GRNs ---
+  app.get('/api/grns', (req, res) => {
+    const { company_id } = req.query;
+    if (!company_id) return res.json([]);
+    const grns = db.prepare('SELECT * FROM grns WHERE company_id = ? ORDER BY date DESC').all(company_id);
+    res.json(grns);
+  });
+
+  app.post('/api/grns', (req, res) => {
+    const { company_id, grn_number, date, po_id, supplier, total_amount, status, items, userId, userName } = req.body;
+    const result = db.prepare('INSERT INTO grns (company_id, grn_number, date, po_id, supplier, total_amount, status, items) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').run(company_id, grn_number, date, po_id, supplier, total_amount, status || 'Received', JSON.stringify(items));
+    logEvent(userId, userName, 'CREATE', 'GRN', result.lastInsertRowid as number, `Created GRN: ${grn_number}`);
+    res.json({ id: result.lastInsertRowid });
+  });
+
+  app.put('/api/grns/:id', (req, res) => {
+    const { grn_number, date, po_id, supplier, total_amount, status, items, userId, userName } = req.body;
+    db.prepare('UPDATE grns SET grn_number = ?, date = ?, po_id = ?, supplier = ?, total_amount = ?, status = ?, items = ? WHERE id = ?').run(grn_number, date, po_id, supplier, total_amount, status, JSON.stringify(items), req.params.id);
+    logEvent(userId, userName, 'UPDATE', 'GRN', Number(req.params.id), `Updated GRN: ${grn_number}`);
+    res.json({ success: true });
+  });
+
+  app.delete('/api/grns/:id', (req, res) => {
+    const { userId, userName } = req.query;
+    db.prepare('DELETE FROM grns WHERE id = ?').run(req.params.id);
+    logEvent(userId, userName, 'DELETE', 'GRN', req.params.id, `Deleted GRN ID: ${req.params.id}`);
+    res.json({ success: true });
+  });
+
+  // --- Inter-Company Transfers ---
+  app.post('/api/transfers/ledger', (req, res) => {
+    const { ledger_id, target_company_id, userId, userName } = req.body;
+    db.prepare('UPDATE ledgers SET company_id = ? WHERE id = ?').run(target_company_id, ledger_id);
+    logEvent(userId, userName, 'TRANSFER', 'LEDGER', ledger_id, `Transferred Ledger ID: ${ledger_id} to Company ID: ${target_company_id}`);
+    res.json({ success: true });
+  });
+
+  app.post('/api/transfers/voucher', (req, res) => {
+    const { voucher_id, target_company_id, userId, userName } = req.body;
+    db.prepare('UPDATE transactions SET company_id = ? WHERE id = ?').run(target_company_id, voucher_id);
+    logEvent(userId, userName, 'TRANSFER', 'VOUCHER', voucher_id, `Transferred Voucher ID: ${voucher_id} to Company ID: ${target_company_id}`);
+    res.json({ success: true });
+  });
+
+  app.post('/api/transfers/asset', (req, res) => {
+    const { asset_id, target_company_id, userId, userName } = req.body;
+    db.prepare('UPDATE assets SET company_id = ? WHERE id = ?').run(target_company_id, asset_id);
+    logEvent(userId, userName, 'TRANSFER', 'ASSET', asset_id, `Transferred Asset ID: ${asset_id} to Company ID: ${target_company_id}`);
     res.json({ success: true });
   });
 

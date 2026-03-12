@@ -20,7 +20,10 @@ import {
   Trash2,
   Edit,
   History,
-  Upload
+  Upload,
+  ShoppingCart,
+  ClipboardList,
+  ArrowRightLeft
 } from 'lucide-react';
 import { 
   BarChart, 
@@ -39,7 +42,8 @@ import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { format } from 'date-fns';
 import Papa from 'papaparse';
-import { cn, User, Company, Ledger, Transaction, Asset, Tax } from './types';
+import { cn, User, Company, Ledger, Transaction, Asset, Tax, PurchaseOrder, GRN, POItem, GRNItem } from './types';
+import { TransferModal } from './components/TransferModal';
 
 // --- Components ---
 
@@ -70,7 +74,7 @@ const Card = ({ children, className }: CardProps) => (
   </div>
 );
 
-const Button = ({ children, onClick, variant = 'primary', className, disabled, type = 'button' }: { children: React.ReactNode, onClick?: () => void, variant?: 'primary' | 'secondary' | 'outline' | 'danger', className?: string, disabled?: boolean, type?: 'button' | 'submit' }) => {
+export const Button = ({ children, onClick, variant = 'primary', className, disabled, type = 'button' }: { children: React.ReactNode, onClick?: () => void, variant?: 'primary' | 'secondary' | 'outline' | 'danger', className?: string, disabled?: boolean, type?: 'button' | 'submit' }) => {
   const variants = {
     primary: "bg-zinc-900 text-white hover:bg-zinc-800",
     secondary: "bg-zinc-100 text-zinc-900 hover:bg-zinc-200",
@@ -154,7 +158,7 @@ export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [companies, setCompanies] = useState<Company[]>([]);
   const [currentCompany, setCurrentCompany] = useState<Company | null>(null);
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'ledgers' | 'vouchers' | 'assets' | 'users' | 'companies' | 'taxes'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'ledgers' | 'vouchers' | 'assets' | 'users' | 'companies' | 'taxes' | 'lpo' | 'ipo' | 'grn' | 'logs'>('dashboard');
   const [isDarkMode, setIsDarkMode] = useState(() => {
     if (typeof window !== 'undefined') {
       const theme = localStorage.getItem('theme');
@@ -170,6 +174,8 @@ export default function App() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [assets, setAssets] = useState<Asset[]>([]);
   const [taxes, setTaxes] = useState<Tax[]>([]);
+  const [pos, setPos] = useState<PurchaseOrder[]>([]);
+  const [grns, setGrns] = useState<GRN[]>([]);
   const [allUsers, setAllUsers] = useState<User[]>([]);
   const [eventLogs, setEventLogs] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
@@ -244,16 +250,20 @@ export default function App() {
   const fetchCompanyData = async () => {
     if (!currentCompany) return;
     setLoading(true);
-    const [lRes, tRes, aRes, taxRes] = await Promise.all([
+    const [lRes, tRes, aRes, taxRes, poRes, grnRes] = await Promise.all([
       fetch(`/api/ledgers/${currentCompany.id}`),
       fetch(`/api/transactions/${currentCompany.id}`),
       fetch(`/api/assets/${currentCompany.id}`),
-      fetch(`/api/taxes/${currentCompany.id}`)
+      fetch(`/api/taxes/${currentCompany.id}`),
+      fetch(`/api/purchase-orders?company_id=${currentCompany.id}`),
+      fetch(`/api/grns?company_id=${currentCompany.id}`)
     ]);
     setLedgers(await lRes.json());
     setTransactions(await tRes.json());
     setAssets(await aRes.json());
     setTaxes(await taxRes.json());
+    setPos(await poRes.json());
+    setGrns(await grnRes.json());
     setLoading(false);
   };
 
@@ -390,6 +400,9 @@ export default function App() {
             <SidebarItem icon={FileText} label="Vouchers" active={activeTab === 'vouchers'} onClick={() => setActiveTab('vouchers')} />
             <SidebarItem icon={Package} label="Assets" active={activeTab === 'assets'} onClick={() => setActiveTab('assets')} />
             <SidebarItem icon={DollarSign} label="Taxes" active={activeTab === 'taxes'} onClick={() => setActiveTab('taxes')} />
+            <SidebarItem icon={ShoppingCart} label="LPO" active={activeTab === 'lpo'} onClick={() => setActiveTab('lpo')} />
+            <SidebarItem icon={ShoppingCart} label="IPO" active={activeTab === 'ipo'} onClick={() => setActiveTab('ipo')} />
+            <SidebarItem icon={ClipboardList} label="GRN" active={activeTab === 'grn'} onClick={() => setActiveTab('grn')} />
             {user.role === 'admin' && (
               <SidebarItem icon={UsersIcon} label="Users" active={activeTab === 'users'} onClick={() => setActiveTab('users')} />
             )}
@@ -466,6 +479,7 @@ export default function App() {
           {activeTab === 'ledgers' && (
             <LedgersView 
               ledgers={ledgers} 
+              companies={companies}
               onRefresh={() => { fetchCompanyData(); fetchLogs(); }} 
               currentCompany={currentCompany}
               currentUser={user}
@@ -480,6 +494,7 @@ export default function App() {
               transactions={transactions} 
               ledgers={ledgers} 
               taxes={taxes}
+              companies={companies}
               onRefresh={() => { fetchCompanyData(); fetchLogs(); }} 
               currentCompany={currentCompany}
               currentUser={user}
@@ -492,6 +507,7 @@ export default function App() {
           {activeTab === 'assets' && (
             <AssetsView 
               assets={assets} 
+              companies={companies}
               onRefresh={() => { fetchCompanyData(); fetchLogs(); }} 
               currentCompany={currentCompany}
               currentUser={user}
@@ -504,6 +520,39 @@ export default function App() {
           {activeTab === 'taxes' && (
             <TaxesView 
               taxes={taxes} 
+              onRefresh={() => { fetchCompanyData(); fetchLogs(); }} 
+              currentCompany={currentCompany}
+              currentUser={user}
+              showNotification={showNotification}
+              handleConfirm={handleConfirm}
+            />
+          )}
+          {activeTab === 'lpo' && (
+            <PurchaseOrdersView 
+              pos={pos} 
+              type="LPO"
+              onRefresh={() => { fetchCompanyData(); fetchLogs(); }} 
+              currentCompany={currentCompany}
+              currentUser={user}
+              showNotification={showNotification}
+              handleConfirm={handleConfirm}
+            />
+          )}
+          {activeTab === 'ipo' && (
+            <PurchaseOrdersView 
+              pos={pos} 
+              type="IPO"
+              onRefresh={() => { fetchCompanyData(); fetchLogs(); }} 
+              currentCompany={currentCompany}
+              currentUser={user}
+              showNotification={showNotification}
+              handleConfirm={handleConfirm}
+            />
+          )}
+          {activeTab === 'grn' && (
+            <GRNsView 
+              grns={grns} 
+              pos={pos}
               onRefresh={() => { fetchCompanyData(); fetchLogs(); }} 
               currentCompany={currentCompany}
               currentUser={user}
@@ -721,10 +770,11 @@ function DashboardView({ transactions, ledgers, assets, currentCompany }: { tran
   );
 }
 
-function LedgersView({ ledgers, onRefresh, currentCompany, currentUser, showNotification, handleConfirm, exportExcel, exportPDF }: { ledgers: Ledger[], onRefresh: () => void, currentCompany: Company | null, currentUser: User | null, showNotification: (m: string, t?: 'success' | 'error') => void, handleConfirm: (t: string, m: string, c: () => void) => void, exportExcel: () => void, exportPDF: () => void }) {
+function LedgersView({ ledgers, companies, onRefresh, currentCompany, currentUser, showNotification, handleConfirm, exportExcel, exportPDF }: { ledgers: Ledger[], companies: Company[], onRefresh: () => void, currentCompany: Company | null, currentUser: User | null, showNotification: (m: string, t?: 'success' | 'error') => void, handleConfirm: (t: string, m: string, c: () => void) => void, exportExcel: () => void, exportPDF: () => void }) {
   console.log('LedgersView currentUser:', currentUser);
   const [showAdd, setShowAdd] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [transferringId, setTransferringId] = useState<number | null>(null);
   const [form, setForm] = useState({ name: '', group_name: 'Direct Expenses', opening_balance: 0 });
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -780,6 +830,31 @@ function LedgersView({ ledgers, onRefresh, currentCompany, currentUser, showNoti
         }
       }
     );
+  };
+
+  const handleTransfer = async (targetCompanyId: number) => {
+    if (!transferringId || !currentCompany) return;
+    try {
+      const res = await fetch('/api/transfers/ledger', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ledger_id: transferringId,
+          source_company_id: currentCompany.id,
+          target_company_id: targetCompanyId,
+          userId: currentUser?.id,
+          userName: currentUser?.username
+        })
+      });
+      if (res.ok) {
+        showNotification("Ledger transferred successfully");
+        onRefresh();
+      } else {
+        showNotification("Failed to transfer ledger", "error");
+      }
+    } catch (e) {
+      showNotification("Failed to transfer ledger", "error");
+    }
   };
 
   const fileInputRef = React.useRef<HTMLInputElement>(null);
@@ -932,6 +1007,9 @@ function LedgersView({ ledgers, onRefresh, currentCompany, currentUser, showNoti
                 <td className="px-6 py-4 text-sm text-zinc-500 dark:text-zinc-400">{l.group_name}</td>
                 <td className="px-6 py-4 text-sm font-mono text-right dark:text-zinc-300">{currentCompany?.currency_symbol || '₹'}{l.opening_balance.toLocaleString()}</td>
                 <td className="px-6 py-4 text-right flex justify-end gap-2">
+                  <button onClick={() => setTransferringId(l.id)} className="text-zinc-400 hover:text-zinc-600 transition-colors" title="Transfer Ledger">
+                    <ArrowRightLeft size={16} />
+                  </button>
                   <button onClick={() => handleEdit(l)} className="text-zinc-400 hover:text-zinc-600 transition-colors">
                     <Edit size={16} />
                   </button>
@@ -944,13 +1022,23 @@ function LedgersView({ ledgers, onRefresh, currentCompany, currentUser, showNoti
           </tbody>
         </table>
       </Card>
+
+      <TransferModal
+        isOpen={transferringId !== null}
+        onClose={() => setTransferringId(null)}
+        companies={companies}
+        currentCompanyId={currentCompany?.id || 0}
+        onTransfer={handleTransfer}
+        itemName="Ledger"
+      />
     </div>
   );
 }
 
-function VouchersView({ transactions, ledgers, taxes, onRefresh, currentCompany, currentUser, showNotification, handleConfirm, exportExcel, exportPDF }: { transactions: Transaction[], ledgers: Ledger[], taxes: Tax[], onRefresh: () => void, currentCompany: Company | null, currentUser: User | null, showNotification: (m: string, t?: 'success' | 'error') => void, handleConfirm: (t: string, m: string, c: () => void) => void, exportExcel: () => void, exportPDF: () => void }) {
+function VouchersView({ transactions, ledgers, taxes, companies, onRefresh, currentCompany, currentUser, showNotification, handleConfirm, exportExcel, exportPDF }: { transactions: Transaction[], ledgers: Ledger[], taxes: Tax[], companies: Company[], onRefresh: () => void, currentCompany: Company | null, currentUser: User | null, showNotification: (m: string, t?: 'success' | 'error') => void, handleConfirm: (t: string, m: string, c: () => void) => void, exportExcel: () => void, exportPDF: () => void }) {
   const [showAdd, setShowAdd] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [transferringId, setTransferringId] = useState<number | null>(null);
   const [form, setForm] = useState({ 
     date: format(new Date(), 'yyyy-MM-dd'), 
     debit_ledger_id: '', 
@@ -1037,6 +1125,31 @@ function VouchersView({ transactions, ledgers, taxes, onRefresh, currentCompany,
         }
       }
     );
+  };
+
+  const handleTransfer = async (targetCompanyId: number) => {
+    if (!transferringId || !currentCompany) return;
+    try {
+      const res = await fetch('/api/transfers/voucher', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          transaction_id: transferringId,
+          source_company_id: currentCompany.id,
+          target_company_id: targetCompanyId,
+          userId: currentUser?.id,
+          userName: currentUser?.username
+        })
+      });
+      if (res.ok) {
+        showNotification("Voucher transferred successfully");
+        onRefresh();
+      } else {
+        showNotification("Failed to transfer voucher", "error");
+      }
+    } catch (e) {
+      showNotification("Failed to transfer voucher", "error");
+    }
   };
 
   const fileInputRef = React.useRef<HTMLInputElement>(null);
@@ -1213,6 +1326,9 @@ function VouchersView({ transactions, ledgers, taxes, onRefresh, currentCompany,
                 </td>
                 <td className="px-6 py-4 text-sm font-mono text-right font-bold dark:text-zinc-100">{currentCompany?.currency_symbol || '₹'}{(t.amount + t.tax_amount).toLocaleString()}</td>
                 <td className="px-6 py-4 text-right flex justify-end gap-2">
+                  <button onClick={() => setTransferringId(t.id)} className="text-zinc-400 hover:text-zinc-600 transition-colors" title="Transfer Voucher">
+                    <ArrowRightLeft size={16} />
+                  </button>
                   <button onClick={() => handleEdit(t)} className="text-zinc-400 hover:text-zinc-600 transition-colors">
                     <Edit size={16} />
                   </button>
@@ -1225,13 +1341,23 @@ function VouchersView({ transactions, ledgers, taxes, onRefresh, currentCompany,
           </tbody>
         </table>
       </Card>
+
+      <TransferModal
+        isOpen={transferringId !== null}
+        onClose={() => setTransferringId(null)}
+        companies={companies}
+        currentCompanyId={currentCompany?.id || 0}
+        onTransfer={handleTransfer}
+        itemName="Voucher"
+      />
     </div>
   );
 }
 
-function AssetsView({ assets, onRefresh, currentCompany, currentUser, showNotification, handleConfirm, exportExcel, exportPDF }: { assets: Asset[], onRefresh: () => void, currentCompany: Company | null, currentUser: User | null, showNotification: (m: string, t?: 'success' | 'error') => void, handleConfirm: (t: string, m: string, c: () => void) => void, exportExcel: () => void, exportPDF: () => void }) {
+function AssetsView({ assets, companies, onRefresh, currentCompany, currentUser, showNotification, handleConfirm, exportExcel, exportPDF }: { assets: Asset[], companies: Company[], onRefresh: () => void, currentCompany: Company | null, currentUser: User | null, showNotification: (m: string, t?: 'success' | 'error') => void, handleConfirm: (t: string, m: string, c: () => void) => void, exportExcel: () => void, exportPDF: () => void }) {
   const [showAdd, setShowAdd] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [transferringId, setTransferringId] = useState<number | null>(null);
   const [form, setForm] = useState({ name: '', value: 0, purchase_date: format(new Date(), 'yyyy-MM-dd'), depreciation_rate: 10 });
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -1286,6 +1412,31 @@ function AssetsView({ assets, onRefresh, currentCompany, currentUser, showNotifi
         }
       }
     );
+  };
+
+  const handleTransfer = async (targetCompanyId: number) => {
+    if (!transferringId || !currentCompany) return;
+    try {
+      const res = await fetch('/api/transfers/asset', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          asset_id: transferringId,
+          source_company_id: currentCompany.id,
+          target_company_id: targetCompanyId,
+          userId: currentUser?.id,
+          userName: currentUser?.username
+        })
+      });
+      if (res.ok) {
+        showNotification("Asset transferred successfully");
+        onRefresh();
+      } else {
+        showNotification("Failed to transfer asset", "error");
+      }
+    } catch (e) {
+      showNotification("Failed to transfer asset", "error");
+    }
   };
 
   const fileInputRef = React.useRef<HTMLInputElement>(null);
@@ -1428,6 +1579,9 @@ function AssetsView({ assets, onRefresh, currentCompany, currentUser, showNotifi
                 <td className="px-6 py-4 text-sm text-zinc-500 dark:text-zinc-400">{a.depreciation_rate}% p.a.</td>
                 <td className="px-6 py-4 text-sm font-mono text-right dark:text-zinc-300">{currentCompany?.currency_symbol || '₹'}{a.value.toLocaleString()}</td>
                 <td className="px-6 py-4 text-right flex justify-end gap-2">
+                  <button onClick={() => setTransferringId(a.id)} className="text-zinc-400 hover:text-zinc-600 transition-colors" title="Transfer Asset">
+                    <ArrowRightLeft size={16} />
+                  </button>
                   <button onClick={() => handleEdit(a)} className="text-zinc-400 hover:text-zinc-600 transition-colors">
                     <Edit size={16} />
                   </button>
@@ -1440,6 +1594,15 @@ function AssetsView({ assets, onRefresh, currentCompany, currentUser, showNotifi
           </tbody>
         </table>
       </Card>
+
+      <TransferModal
+        isOpen={transferringId !== null}
+        onClose={() => setTransferringId(null)}
+        companies={companies}
+        currentCompanyId={currentCompany?.id || 0}
+        onTransfer={handleTransfer}
+        itemName="Asset"
+      />
     </div>
   );
 }
@@ -1571,6 +1734,438 @@ function UsersView({ allUsers, onRefresh, currentUser, showNotification, handleC
                 </td>
               </tr>
             ))}
+          </tbody>
+        </table>
+      </Card>
+    </div>
+  );
+}
+
+function PurchaseOrdersView({ pos, type, onRefresh, currentCompany, currentUser, showNotification, handleConfirm }: { pos: PurchaseOrder[], type: 'LPO' | 'IPO', onRefresh: () => void, currentCompany: Company | null, currentUser: User | null, showNotification: (m: string, t?: 'success' | 'error') => void, handleConfirm: (t: string, m: string, c: () => void) => void }) {
+  const [showAdd, setShowAdd] = useState(false);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [form, setForm] = useState({ po_number: '', date: new Date().toISOString().split('T')[0], supplier: '', status: 'Pending', items: [] as POItem[] });
+  const [newItem, setNewItem] = useState({ description: '', quantity: 1, rate: 0, amount: 0 });
+
+  const filteredPos = pos.filter(p => p.type === type);
+
+  const handleAddItem = () => {
+    if (newItem.description && newItem.quantity > 0 && newItem.rate >= 0) {
+      setForm({ ...form, items: [...form.items, { ...newItem, amount: newItem.quantity * newItem.rate }] });
+      setNewItem({ description: '', quantity: 1, rate: 0, amount: 0 });
+    }
+  };
+
+  const handleRemoveItem = (index: number) => {
+    setForm({ ...form, items: form.items.filter((_, i) => i !== index) });
+  };
+
+  const totalAmount = form.items.reduce((sum, item) => sum + item.amount, 0);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!currentCompany) return;
+    
+    const url = editingId ? `/api/purchase-orders/${editingId}` : '/api/purchase-orders';
+    const method = editingId ? 'PUT' : 'POST';
+    
+    const res = await fetch(url, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ 
+        ...form, 
+        type,
+        total_amount: totalAmount,
+        company_id: currentCompany.id,
+        userId: currentUser?.id,
+        userName: currentUser?.username
+      })
+    });
+    
+    if (res.ok) {
+      showNotification(editingId ? "PO updated successfully" : "PO created successfully");
+      setForm({ po_number: '', date: new Date().toISOString().split('T')[0], supplier: '', status: 'Pending', items: [] });
+      setShowAdd(false);
+      setEditingId(null);
+      onRefresh();
+    } else {
+      showNotification("Failed to save PO", "error");
+    }
+  };
+
+  const handleEdit = (p: PurchaseOrder) => {
+    setForm({ po_number: p.po_number, date: p.date, supplier: p.supplier, status: p.status, items: JSON.parse(p.items || '[]') });
+    setEditingId(p.id);
+    setShowAdd(true);
+  };
+
+  const handleDelete = async (id: number) => {
+    handleConfirm("Delete PO", "Are you sure you want to delete this Purchase Order?", async () => {
+      const res = await fetch(`/api/purchase-orders/${id}?userId=${currentUser?.id}&userName=${currentUser?.username}`, { method: 'DELETE' });
+      if (res.ok) {
+        showNotification("PO deleted successfully");
+        onRefresh();
+      } else {
+        showNotification("Failed to delete PO", "error");
+      }
+    });
+  };
+
+  const exportPDF = (p: PurchaseOrder) => {
+    const doc = new jsPDF();
+    doc.setFontSize(20);
+    doc.text(`${type} - ${p.po_number}`, 14, 22);
+    doc.setFontSize(12);
+    doc.text(`Date: ${p.date}`, 14, 32);
+    doc.text(`Supplier: ${p.supplier}`, 14, 40);
+    doc.text(`Status: ${p.status}`, 14, 48);
+    
+    const items = JSON.parse(p.items || '[]');
+    autoTable(doc, {
+      startY: 55,
+      head: [['Description', 'Quantity', 'Rate', 'Amount']],
+      body: items.map((i: any) => [i.description, i.quantity, i.rate, i.amount.toFixed(2)]),
+      foot: [['', '', 'Total', p.total_amount.toFixed(2)]],
+    });
+    
+    doc.save(`${type}_${p.po_number}.pdf`);
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <Button onClick={() => setShowAdd(true)} className="flex items-center gap-2 dark:bg-white dark:text-zinc-900">
+          <Plus size={16} /> New {type}
+        </Button>
+      </div>
+
+      {showAdd && (
+        <Card className="p-6 border-zinc-900/20 bg-zinc-50/50 dark:bg-zinc-900 dark:border-zinc-800">
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <Input label="PO Number" value={form.po_number} onChange={e => setForm({...form, po_number: e.target.value})} required className="dark:bg-zinc-800 dark:border-zinc-700 dark:text-white" />
+              <Input label="Date" type="date" value={form.date} onChange={e => setForm({...form, date: e.target.value})} required className="dark:bg-zinc-800 dark:border-zinc-700 dark:text-white" />
+              <Input label="Supplier" value={form.supplier} onChange={e => setForm({...form, supplier: e.target.value})} required className="dark:bg-zinc-800 dark:border-zinc-700 dark:text-white" />
+              <Select 
+                label="Status" 
+                value={form.status} 
+                onChange={e => setForm({...form, status: e.target.value})}
+                options={[{value: 'Pending', label: 'Pending'}, {value: 'Approved', label: 'Approved'}, {value: 'Completed', label: 'Completed'}, {value: 'Cancelled', label: 'Cancelled'}]}
+                className="dark:bg-zinc-800 dark:border-zinc-700 dark:text-white"
+              />
+            </div>
+            
+            <div className="border-t border-zinc-200 dark:border-zinc-800 pt-4 mt-4">
+              <h4 className="text-sm font-semibold text-zinc-900 dark:text-white mb-4">Items</h4>
+              <div className="grid grid-cols-1 md:grid-cols-5 gap-4 items-end mb-4">
+                <div className="md:col-span-2">
+                  <Input label="Description" value={newItem.description} onChange={e => setNewItem({...newItem, description: e.target.value})} className="dark:bg-zinc-800 dark:border-zinc-700 dark:text-white" />
+                </div>
+                <Input label="Qty" type="number" value={newItem.quantity} onChange={e => setNewItem({...newItem, quantity: Number(e.target.value)})} className="dark:bg-zinc-800 dark:border-zinc-700 dark:text-white" />
+                <Input label="Rate" type="number" step="0.01" value={newItem.rate} onChange={e => setNewItem({...newItem, rate: Number(e.target.value)})} className="dark:bg-zinc-800 dark:border-zinc-700 dark:text-white" />
+                <Button type="button" variant="outline" onClick={handleAddItem} className="dark:border-zinc-700 dark:text-zinc-300">Add Item</Button>
+              </div>
+              
+              {form.items.length > 0 && (
+                <table className="w-full text-left mb-4">
+                  <thead>
+                    <tr className="border-b border-zinc-200 dark:border-zinc-800">
+                      <th className="py-2 text-xs font-semibold text-zinc-500">Description</th>
+                      <th className="py-2 text-xs font-semibold text-zinc-500 text-right">Qty</th>
+                      <th className="py-2 text-xs font-semibold text-zinc-500 text-right">Rate</th>
+                      <th className="py-2 text-xs font-semibold text-zinc-500 text-right">Amount</th>
+                      <th className="py-2 text-xs font-semibold text-zinc-500 text-right">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {form.items.map((item, i) => (
+                      <tr key={i} className="border-b border-zinc-100 dark:border-zinc-800/50">
+                        <td className="py-2 text-sm dark:text-zinc-300">{item.description}</td>
+                        <td className="py-2 text-sm text-right dark:text-zinc-300">{item.quantity}</td>
+                        <td className="py-2 text-sm text-right dark:text-zinc-300">{item.rate.toFixed(2)}</td>
+                        <td className="py-2 text-sm text-right dark:text-zinc-300">{item.amount.toFixed(2)}</td>
+                        <td className="py-2 text-right">
+                          <button type="button" onClick={() => handleRemoveItem(i)} className="text-red-500 hover:text-red-700"><Trash2 size={14} /></button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr>
+                      <td colSpan={3} className="py-2 text-sm font-bold text-right dark:text-zinc-900 dark:text-white">Total:</td>
+                      <td className="py-2 text-sm font-bold text-right dark:text-zinc-900 dark:text-white">{totalAmount.toFixed(2)}</td>
+                      <td></td>
+                    </tr>
+                  </tfoot>
+                </table>
+              )}
+            </div>
+
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => { setShowAdd(false); setEditingId(null); setForm({ po_number: '', date: new Date().toISOString().split('T')[0], supplier: '', status: 'Pending', items: [] }); }} className="dark:border-zinc-700 dark:text-zinc-300">Cancel</Button>
+              <Button type="submit" className="dark:bg-white dark:text-zinc-900">{editingId ? `Update ${type}` : `Save ${type}`}</Button>
+            </div>
+          </form>
+        </Card>
+      )}
+
+      <Card className="p-0">
+        <table className="w-full">
+          <thead>
+            <tr className="border-b border-zinc-200 dark:border-zinc-800">
+              <th className="px-6 py-3 text-left text-xs font-semibold text-zinc-500 uppercase">PO Number</th>
+              <th className="px-6 py-3 text-left text-xs font-semibold text-zinc-500 uppercase">Date</th>
+              <th className="px-6 py-3 text-left text-xs font-semibold text-zinc-500 uppercase">Supplier</th>
+              <th className="px-6 py-3 text-left text-xs font-semibold text-zinc-500 uppercase">Status</th>
+              <th className="px-6 py-3 text-right text-xs font-semibold text-zinc-500 uppercase">Total Amount</th>
+              <th className="px-6 py-3 text-right text-xs font-semibold text-zinc-500 uppercase">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filteredPos.map(p => (
+              <tr key={p.id} className="border-b border-zinc-100 dark:border-zinc-800/50 hover:bg-zinc-50 dark:hover:bg-zinc-800/50">
+                <td className="px-6 py-4 text-sm font-medium text-zinc-900 dark:text-white">{p.po_number}</td>
+                <td className="px-6 py-4 text-sm text-zinc-600 dark:text-zinc-400">{p.date}</td>
+                <td className="px-6 py-4 text-sm text-zinc-600 dark:text-zinc-400">{p.supplier}</td>
+                <td className="px-6 py-4 text-sm">
+                  <span className={cn("px-2 py-1 rounded-full text-xs font-medium", 
+                    p.status === 'Completed' ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400" : 
+                    p.status === 'Approved' ? "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400" :
+                    p.status === 'Cancelled' ? "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400" :
+                    "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400"
+                  )}>
+                    {p.status}
+                  </span>
+                </td>
+                <td className="px-6 py-4 text-sm text-zinc-900 dark:text-white text-right font-mono">{currentCompany?.currency_symbol}{p.total_amount.toFixed(2)}</td>
+                <td className="px-6 py-4 text-right space-x-2">
+                  <button onClick={() => exportPDF(p)} className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300" title="Export PDF"><Download size={16} /></button>
+                  <button onClick={() => handleEdit(p)} className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"><Edit size={16} /></button>
+                  <button onClick={() => handleDelete(p.id)} className="text-red-400 hover:text-red-600"><Trash2 size={16} /></button>
+                </td>
+              </tr>
+            ))}
+            {filteredPos.length === 0 && (
+              <tr>
+                <td colSpan={6} className="px-6 py-8 text-center text-sm text-zinc-500 dark:text-zinc-400">
+                  No {type}s found. Create one to get started.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </Card>
+    </div>
+  );
+}
+
+function GRNsView({ grns, pos, onRefresh, currentCompany, currentUser, showNotification, handleConfirm }: { grns: GRN[], pos: PurchaseOrder[], onRefresh: () => void, currentCompany: Company | null, currentUser: User | null, showNotification: (m: string, t?: 'success' | 'error') => void, handleConfirm: (t: string, m: string, c: () => void) => void }) {
+  const [showAdd, setShowAdd] = useState(false);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [form, setForm] = useState({ grn_number: '', date: new Date().toISOString().split('T')[0], po_id: '', supplier: '', status: 'Received', items: [] as GRNItem[] });
+  const [newItem, setNewItem] = useState({ description: '', quantity: 1, rate: 0, amount: 0 });
+
+  const handleAddItem = () => {
+    if (newItem.description && newItem.quantity > 0 && newItem.rate >= 0) {
+      setForm({ ...form, items: [...form.items, { ...newItem, amount: newItem.quantity * newItem.rate }] });
+      setNewItem({ description: '', quantity: 1, rate: 0, amount: 0 });
+    }
+  };
+
+  const handleRemoveItem = (index: number) => {
+    setForm({ ...form, items: form.items.filter((_, i) => i !== index) });
+  };
+
+  const totalAmount = form.items.reduce((sum, item) => sum + item.amount, 0);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!currentCompany) return;
+    
+    const url = editingId ? `/api/grns/${editingId}` : '/api/grns';
+    const method = editingId ? 'PUT' : 'POST';
+    
+    const res = await fetch(url, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ 
+        ...form, 
+        total_amount: totalAmount,
+        company_id: currentCompany.id,
+        userId: currentUser?.id,
+        userName: currentUser?.username
+      })
+    });
+    
+    if (res.ok) {
+      showNotification(editingId ? "GRN updated successfully" : "GRN created successfully");
+      setForm({ grn_number: '', date: new Date().toISOString().split('T')[0], po_id: '', supplier: '', status: 'Received', items: [] });
+      setShowAdd(false);
+      setEditingId(null);
+      onRefresh();
+    } else {
+      showNotification("Failed to save GRN", "error");
+    }
+  };
+
+  const handleEdit = (g: GRN) => {
+    setForm({ grn_number: g.grn_number, date: g.date, po_id: g.po_id.toString(), supplier: g.supplier, status: g.status, items: JSON.parse(g.items || '[]') });
+    setEditingId(g.id);
+    setShowAdd(true);
+  };
+
+  const handleDelete = async (id: number) => {
+    handleConfirm("Delete GRN", "Are you sure you want to delete this GRN?", async () => {
+      const res = await fetch(`/api/grns/${id}?userId=${currentUser?.id}&userName=${currentUser?.username}`, { method: 'DELETE' });
+      if (res.ok) {
+        showNotification("GRN deleted successfully");
+        onRefresh();
+      } else {
+        showNotification("Failed to delete GRN", "error");
+      }
+    });
+  };
+
+  const exportPDF = (g: GRN) => {
+    const doc = new jsPDF();
+    doc.setFontSize(20);
+    doc.text(`Goods Receipt Note - ${g.grn_number}`, 14, 22);
+    doc.setFontSize(12);
+    doc.text(`Date: ${g.date}`, 14, 32);
+    doc.text(`Supplier: ${g.supplier}`, 14, 40);
+    doc.text(`Status: ${g.status}`, 14, 48);
+    
+    const items = JSON.parse(g.items || '[]');
+    autoTable(doc, {
+      startY: 55,
+      head: [['Description', 'Quantity', 'Rate', 'Amount']],
+      body: items.map((i: any) => [i.description, i.quantity, i.rate, i.amount.toFixed(2)]),
+      foot: [['', '', 'Total', g.total_amount.toFixed(2)]],
+    });
+    
+    doc.save(`GRN_${g.grn_number}.pdf`);
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <Button onClick={() => setShowAdd(true)} className="flex items-center gap-2 dark:bg-white dark:text-zinc-900">
+          <Plus size={16} /> New GRN
+        </Button>
+      </div>
+
+      {showAdd && (
+        <Card className="p-6 border-zinc-900/20 bg-zinc-50/50 dark:bg-zinc-900 dark:border-zinc-800">
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <Input label="GRN Number" value={form.grn_number} onChange={e => setForm({...form, grn_number: e.target.value})} required className="dark:bg-zinc-800 dark:border-zinc-700 dark:text-white" />
+              <Input label="Date" type="date" value={form.date} onChange={e => setForm({...form, date: e.target.value})} required className="dark:bg-zinc-800 dark:border-zinc-700 dark:text-white" />
+              <Select 
+                label="PO Reference" 
+                value={form.po_id} 
+                onChange={e => {
+                  const poId = e.target.value;
+                  const po = pos.find(p => p.id.toString() === poId);
+                  if (po) {
+                    setForm({...form, po_id: poId, supplier: po.supplier, items: JSON.parse(po.items || '[]')});
+                  } else {
+                    setForm({...form, po_id: poId});
+                  }
+                }}
+                options={[{value: '', label: 'Select PO (Optional)'}, ...pos.map(p => ({value: p.id, label: `${p.po_number} (${p.supplier})`}))]}
+                className="dark:bg-zinc-800 dark:border-zinc-700 dark:text-white"
+              />
+              <Input label="Supplier" value={form.supplier} onChange={e => setForm({...form, supplier: e.target.value})} required className="dark:bg-zinc-800 dark:border-zinc-700 dark:text-white" />
+            </div>
+            
+            <div className="border-t border-zinc-200 dark:border-zinc-800 pt-4 mt-4">
+              <h4 className="text-sm font-semibold text-zinc-900 dark:text-white mb-4">Items Received</h4>
+              <div className="grid grid-cols-1 md:grid-cols-5 gap-4 items-end mb-4">
+                <div className="md:col-span-2">
+                  <Input label="Description" value={newItem.description} onChange={e => setNewItem({...newItem, description: e.target.value})} className="dark:bg-zinc-800 dark:border-zinc-700 dark:text-white" />
+                </div>
+                <Input label="Qty" type="number" value={newItem.quantity} onChange={e => setNewItem({...newItem, quantity: Number(e.target.value)})} className="dark:bg-zinc-800 dark:border-zinc-700 dark:text-white" />
+                <Input label="Rate" type="number" step="0.01" value={newItem.rate} onChange={e => setNewItem({...newItem, rate: Number(e.target.value)})} className="dark:bg-zinc-800 dark:border-zinc-700 dark:text-white" />
+                <Button type="button" variant="outline" onClick={handleAddItem} className="dark:border-zinc-700 dark:text-zinc-300">Add Item</Button>
+              </div>
+              
+              {form.items.length > 0 && (
+                <table className="w-full text-left mb-4">
+                  <thead>
+                    <tr className="border-b border-zinc-200 dark:border-zinc-800">
+                      <th className="py-2 text-xs font-semibold text-zinc-500">Description</th>
+                      <th className="py-2 text-xs font-semibold text-zinc-500 text-right">Qty</th>
+                      <th className="py-2 text-xs font-semibold text-zinc-500 text-right">Rate</th>
+                      <th className="py-2 text-xs font-semibold text-zinc-500 text-right">Amount</th>
+                      <th className="py-2 text-xs font-semibold text-zinc-500 text-right">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {form.items.map((item, i) => (
+                      <tr key={i} className="border-b border-zinc-100 dark:border-zinc-800/50">
+                        <td className="py-2 text-sm dark:text-zinc-300">{item.description}</td>
+                        <td className="py-2 text-sm text-right dark:text-zinc-300">{item.quantity}</td>
+                        <td className="py-2 text-sm text-right dark:text-zinc-300">{item.rate.toFixed(2)}</td>
+                        <td className="py-2 text-sm text-right dark:text-zinc-300">{item.amount.toFixed(2)}</td>
+                        <td className="py-2 text-right">
+                          <button type="button" onClick={() => handleRemoveItem(i)} className="text-red-500 hover:text-red-700"><Trash2 size={14} /></button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr>
+                      <td colSpan={3} className="py-2 text-sm font-bold text-right dark:text-zinc-900 dark:text-white">Total:</td>
+                      <td className="py-2 text-sm font-bold text-right dark:text-zinc-900 dark:text-white">{totalAmount.toFixed(2)}</td>
+                      <td></td>
+                    </tr>
+                  </tfoot>
+                </table>
+              )}
+            </div>
+
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => { setShowAdd(false); setEditingId(null); setForm({ grn_number: '', date: new Date().toISOString().split('T')[0], po_id: '', supplier: '', status: 'Received', items: [] }); }} className="dark:border-zinc-700 dark:text-zinc-300">Cancel</Button>
+              <Button type="submit" className="dark:bg-white dark:text-zinc-900">{editingId ? 'Update GRN' : 'Save GRN'}</Button>
+            </div>
+          </form>
+        </Card>
+      )}
+
+      <Card className="p-0">
+        <table className="w-full">
+          <thead>
+            <tr className="border-b border-zinc-200 dark:border-zinc-800">
+              <th className="px-6 py-3 text-left text-xs font-semibold text-zinc-500 uppercase">GRN Number</th>
+              <th className="px-6 py-3 text-left text-xs font-semibold text-zinc-500 uppercase">Date</th>
+              <th className="px-6 py-3 text-left text-xs font-semibold text-zinc-500 uppercase">Supplier</th>
+              <th className="px-6 py-3 text-left text-xs font-semibold text-zinc-500 uppercase">PO Ref</th>
+              <th className="px-6 py-3 text-right text-xs font-semibold text-zinc-500 uppercase">Total Amount</th>
+              <th className="px-6 py-3 text-right text-xs font-semibold text-zinc-500 uppercase">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {grns.map(g => (
+              <tr key={g.id} className="border-b border-zinc-100 dark:border-zinc-800/50 hover:bg-zinc-50 dark:hover:bg-zinc-800/50">
+                <td className="px-6 py-4 text-sm font-medium text-zinc-900 dark:text-white">{g.grn_number}</td>
+                <td className="px-6 py-4 text-sm text-zinc-600 dark:text-zinc-400">{g.date}</td>
+                <td className="px-6 py-4 text-sm text-zinc-600 dark:text-zinc-400">{g.supplier}</td>
+                <td className="px-6 py-4 text-sm text-zinc-600 dark:text-zinc-400">{pos.find(p => p.id === g.po_id)?.po_number || '-'}</td>
+                <td className="px-6 py-4 text-sm text-zinc-900 dark:text-white text-right font-mono">{currentCompany?.currency_symbol}{g.total_amount.toFixed(2)}</td>
+                <td className="px-6 py-4 text-right space-x-2">
+                  <button onClick={() => exportPDF(g)} className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300" title="Export PDF"><Download size={16} /></button>
+                  <button onClick={() => handleEdit(g)} className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"><Edit size={16} /></button>
+                  <button onClick={() => handleDelete(g.id)} className="text-red-400 hover:text-red-600"><Trash2 size={16} /></button>
+                </td>
+              </tr>
+            ))}
+            {grns.length === 0 && (
+              <tr>
+                <td colSpan={6} className="px-6 py-8 text-center text-sm text-zinc-500 dark:text-zinc-400">
+                  No GRNs found. Create one to get started.
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </Card>
@@ -1803,25 +2398,91 @@ function CompaniesView({ companies, onRefresh, currentUser, showNotification, ha
                 required
                 className="dark:bg-zinc-800 dark:border-zinc-700 dark:text-white"
                 options={[
-                  { value: '$', label: 'USD ($)' },
-                  { value: '€', label: 'EUR (€)' },
-                  { value: '£', label: 'GBP (£)' },
-                  { value: '₹', label: 'INR (₹)' },
-                  { value: 'A$', label: 'AUD (A$)' },
-                  { value: 'C$', label: 'CAD (C$)' },
-                  { value: '¥', label: 'JPY/CNY (¥)' },
-                  { value: 'S$', label: 'SGD (S$)' },
-                  { value: 'NZ$', label: 'NZD (NZ$)' },
-                  { value: 'R', label: 'ZAR (R)' },
-                  { value: 'د.إ', label: 'AED (د.إ)' },
-                  { value: '﷼', label: 'SAR (﷼)' },
-                  { value: 'CHF', label: 'CHF (CHF)' },
-                  { value: 'HK$', label: 'HKD (HK$)' },
-                  { value: 'kr', label: 'SEK/NOK/DKK (kr)' },
-                  { value: '₩', label: 'KRW (₩)' },
-                  { value: 'R$', label: 'BRL (R$)' },
-                  { value: '₽', label: 'RUB (₽)' },
-                  { value: '₺', label: 'TRY (₺)' },
+                  // North America
+                  { value: '$', label: 'USD - US Dollar ($)' },
+                  { value: 'C$', label: 'CAD - Canadian Dollar (C$)' },
+                  { value: 'MX$', label: 'MXN - Mexican Peso (MX$)' },
+                  // Europe
+                  { value: '€', label: 'EUR - Euro (€)' },
+                  { value: '£', label: 'GBP - British Pound (£)' },
+                  { value: 'CHF', label: 'CHF - Swiss Franc (CHF)' },
+                  { value: 'kr', label: 'SEK/NOK/DKK - Scandinavian Krone (kr)' },
+                  { value: 'zł', label: 'PLN - Polish Złoty (zł)' },
+                  { value: 'Kč', label: 'CZK - Czech Koruna (Kč)' },
+                  { value: 'Ft', label: 'HUF - Hungarian Forint (Ft)' },
+                  { value: 'lei', label: 'RON - Romanian Leu (lei)' },
+                  { value: 'лв', label: 'BGN - Bulgarian Lev (лв)' },
+                  { value: '₴', label: 'UAH - Ukrainian Hryvnia (₴)' },
+                  { value: '₽', label: 'RUB - Russian Ruble (₽)' },
+                  // Asia - East
+                  { value: '¥', label: 'JPY - Japanese Yen (¥)' },
+                  { value: 'CN¥', label: 'CNY - Chinese Yuan (CN¥)' },
+                  { value: 'HK$', label: 'HKD - Hong Kong Dollar (HK$)' },
+                  { value: 'NT$', label: 'TWD - New Taiwan Dollar (NT$)' },
+                  { value: '₩', label: 'KRW - South Korean Won (₩)' },
+                  { value: 'MOP$', label: 'MOP - Macanese Pataca (MOP$)' },
+                  { value: '₮', label: 'MNT - Mongolian Tögrög (₮)' },
+                  // Asia - Southeast
+                  { value: 'S$', label: 'SGD - Singapore Dollar (S$)' },
+                  { value: 'RM', label: 'MYR - Malaysian Ringgit (RM)' },
+                  { value: '฿', label: 'THB - Thai Baht (฿)' },
+                  { value: 'Rp', label: 'IDR - Indonesian Rupiah (Rp)' },
+                  { value: '₱', label: 'PHP - Philippine Peso (₱)' },
+                  { value: '₫', label: 'VND - Vietnamese Đồng (₫)' },
+                  { value: '៛', label: 'KHR - Cambodian Riel (៛)' },
+                  { value: '₭', label: 'LAK - Lao Kip (₭)' },
+                  { value: 'K', label: 'MMK - Myanmar Kyat (K)' },
+                  { value: 'B$', label: 'BND - Brunei Dollar (B$)' },
+                  // Asia - South
+                  { value: '₹', label: 'INR - Indian Rupee (₹)' },
+                  { value: '₨', label: 'PKR - Pakistani Rupee (₨)' },
+                  { value: '৳', label: 'BDT - Bangladeshi Taka (৳)' },
+                  { value: 'LKR', label: 'LKR - Sri Lankan Rupee (LKR)' },
+                  { value: 'रू', label: 'NPR - Nepalese Rupee (रू)' },
+                  { value: 'Rf', label: 'MVR - Maldivian Rufiyaa (Rf)' },
+                  { value: 'Nu.', label: 'BTN - Bhutanese Ngultrum (Nu.)' },
+                  { value: '؋', label: 'AFN - Afghan Afghani (؋)' },
+                  // Asia - Central
+                  { value: '₸', label: 'KZT - Kazakhstani Tenge (₸)' },
+                  { value: 'soʻm', label: 'UZS - Uzbekistani Soʻm (soʻm)' },
+                  { value: 'T', label: 'TMT - Turkmenistani Manat (T)' },
+                  { value: 'SM', label: 'TJS - Tajikistani Somoni (SM)' },
+                  { value: 'с', label: 'KGS - Kyrgyzstani Som (с)' },
+                  // Middle East
+                  { value: 'د.إ', label: 'AED - UAE Dirham (د.إ)' },
+                  { value: '﷼', label: 'SAR - Saudi Riyal (﷼)' },
+                  { value: '₪', label: 'ILS - Israeli New Shekel (₪)' },
+                  { value: '₺', label: 'TRY - Turkish Lira (₺)' },
+                  { value: 'ر.ق', label: 'QAR - Qatari Riyal (ر.ق)' },
+                  { value: 'د.ك', label: 'KWD - Kuwaiti Dinar (د.ك)' },
+                  { value: '.د.ب', label: 'BHD - Bahraini Dinar (.د.ب)' },
+                  { value: 'ر.ع.', label: 'OMR - Omani Rial (ر.ع.)' },
+                  { value: 'د.ا', label: 'JOD - Jordanian Dinar (د.ا)' },
+                  { value: 'ل.ل', label: 'LBP - Lebanese Pound (ل.ل)' },
+                  { value: 'ع.د', label: 'IQD - Iraqi Dinar (ع.د)' },
+                  { value: 'IRR', label: 'IRR - Iranian Rial (IRR)' },
+                  { value: 'SYP', label: 'SYP - Syrian Pound (SYP)' },
+                  { value: 'YER', label: 'YER - Yemeni Rial (YER)' },
+                  { value: '₾', label: 'GEL - Georgian Lari (₾)' },
+                  { value: '֏', label: 'AMD - Armenian Dram (֏)' },
+                  { value: '₼', label: 'AZN - Azerbaijani Manat (₼)' },
+                  // Oceania
+                  { value: 'A$', label: 'AUD - Australian Dollar (A$)' },
+                  { value: 'NZ$', label: 'NZD - New Zealand Dollar (NZ$)' },
+                  { value: 'FJ$', label: 'FJD - Fijian Dollar (FJ$)' },
+                  // Africa
+                  { value: 'R', label: 'ZAR - South African Rand (R)' },
+                  { value: 'E£', label: 'EGP - Egyptian Pound (E£)' },
+                  { value: '₦', label: 'NGN - Nigerian Naira (₦)' },
+                  { value: 'KSh', label: 'KES - Kenyan Shilling (KSh)' },
+                  { value: 'GH₵', label: 'GHS - Ghanaian Cedi (GH₵)' },
+                  { value: 'MAD', label: 'MAD - Moroccan Dirham (MAD)' },
+                  // South America
+                  { value: 'R$', label: 'BRL - Brazilian Real (R$)' },
+                  { value: 'ARS$', label: 'ARS - Argentine Peso (ARS$)' },
+                  { value: 'COP$', label: 'COP - Colombian Peso (COP$)' },
+                  { value: 'CLP$', label: 'CLP - Chilean Peso (CLP$)' },
+                  { value: 'S/', label: 'PEN - Peruvian Sol (S/)' },
                 ]}
               />
             </div>

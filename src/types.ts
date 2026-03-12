@@ -58,3 +58,41 @@ export interface Asset {
   purchase_date: string;
   depreciation_rate: number;
 }
+
+export interface POItem {
+  description: string;
+  quantity: number;
+  rate: number;
+  amount: number;
+}
+
+export interface PurchaseOrder {
+  id: number;
+  company_id: number;
+  type: 'LPO' | 'IPO';
+  po_number: string;
+  date: string;
+  supplier: string;
+  total_amount: number;
+  status: string;
+  items: string; // JSON string
+}
+
+export interface GRNItem {
+  description: string;
+  quantity: number;
+  rate: number;
+  amount: number;
+}
+
+export interface GRN {
+  id: number;
+  company_id: number;
+  grn_number: string;
+  date: string;
+  po_id: number;
+  supplier: string;
+  total_amount: number;
+  status: string;
+  items: string; // JSON string
+}
