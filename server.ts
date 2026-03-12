@@ -545,6 +545,39 @@ async function startServer() {
   });
 
   // --- Inter-Company Transfers ---
+  app.post('/api/transfers/bulk', (req, res) => {
+    try {
+      const { target_company_id, type, ids, userId, userName } = req.body;
+      if (!target_company_id || !type || !ids || !Array.isArray(ids)) {
+        return res.status(400).json({ error: 'Invalid request parameters' });
+      }
+
+      const tableMap: Record<string, string> = {
+        'ledger': 'ledgers',
+        'voucher': 'transactions',
+        'asset': 'assets'
+      };
+      const table = tableMap[type];
+      if (!table) return res.status(400).json({ error: 'Invalid type' });
+
+      const logType = type.toUpperCase();
+      
+      const stmt = db.prepare(`UPDATE ${table} SET company_id = ? WHERE id = ?`);
+      const transferTransaction = db.transaction((ids) => {
+        for (const id of ids) {
+          stmt.run(target_company_id, id);
+          logEvent(userId, userName, 'TRANSFER', logType, id, `Transferred ${logType} ID: ${id} to Company ID: ${target_company_id}`);
+        }
+      });
+      
+      transferTransaction(ids);
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Bulk transfer error:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
   app.post('/api/transfers/ledger', (req, res) => {
     const { ledger_id, target_company_id, userId, userName } = req.body;
     db.prepare('UPDATE ledgers SET company_id = ? WHERE id = ?').run(target_company_id, ledger_id);

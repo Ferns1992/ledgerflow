@@ -53,8 +53,8 @@ const SidebarItem = ({ icon: Icon, label, active, onClick }: { icon: any, label:
     className={cn(
       "w-full flex items-center gap-3 px-4 py-3 text-sm font-medium transition-colors rounded-lg",
       active 
-        ? "bg-zinc-900 text-white" 
-        : "text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100"
+        ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900" 
+        : "text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:text-zinc-100 dark:hover:bg-zinc-800"
     )}
   >
     <Icon size={18} />
@@ -76,9 +76,9 @@ const Card = ({ children, className }: CardProps) => (
 
 export const Button = ({ children, onClick, variant = 'primary', className, disabled, type = 'button' }: { children: React.ReactNode, onClick?: () => void, variant?: 'primary' | 'secondary' | 'outline' | 'danger', className?: string, disabled?: boolean, type?: 'button' | 'submit' }) => {
   const variants = {
-    primary: "bg-zinc-900 text-white hover:bg-zinc-800",
-    secondary: "bg-zinc-100 text-zinc-900 hover:bg-zinc-200",
-    outline: "border border-zinc-200 text-zinc-700 hover:bg-zinc-50",
+    primary: "bg-zinc-900 text-white hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200",
+    secondary: "bg-zinc-100 text-zinc-900 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-100 dark:hover:bg-zinc-700",
+    outline: "border border-zinc-200 text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800",
     danger: "bg-red-600 text-white hover:bg-red-700"
   };
   return (
@@ -158,13 +158,11 @@ export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [companies, setCompanies] = useState<Company[]>([]);
   const [currentCompany, setCurrentCompany] = useState<Company | null>(null);
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'ledgers' | 'vouchers' | 'assets' | 'users' | 'companies' | 'taxes' | 'lpo' | 'ipo' | 'grn' | 'logs'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'ledgers' | 'vouchers' | 'assets' | 'users' | 'companies' | 'taxes' | 'lpo' | 'ipo' | 'grn' | 'logs' | 'transfer'>('dashboard');
   const [isDarkMode, setIsDarkMode] = useState(() => {
     if (typeof window !== 'undefined') {
       const theme = localStorage.getItem('theme');
-      console.log('theme from localStorage:', theme);
       const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-      console.log('prefersDark:', prefersDark);
       return theme === 'dark' || (!theme && prefersDark);
     }
     return false;
@@ -194,17 +192,15 @@ export default function App() {
 
   useLayoutEffect(() => {
     const root = window.document.documentElement;
-    const body = window.document.body;
-    console.log('Applying theme:', isDarkMode ? 'dark' : 'light');
+    console.log('Theme toggle triggered. isDarkMode:', isDarkMode);
     if (isDarkMode) {
       root.classList.add('dark');
-      body.classList.add('dark');
       localStorage.setItem('theme', 'dark');
     } else {
       root.classList.remove('dark');
-      body.classList.remove('dark');
       localStorage.setItem('theme', 'light');
     }
+    console.log('Current html classes:', root.className);
   }, [isDarkMode]);
 
   // Fetch Data
@@ -357,7 +353,7 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 flex transition-colors duration-300">
+    <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 flex transition-colors duration-200">
       {notification && (
         <Notification 
           message={notification.message} 
@@ -407,6 +403,7 @@ export default function App() {
               <SidebarItem icon={UsersIcon} label="Users" active={activeTab === 'users'} onClick={() => setActiveTab('users')} />
             )}
             <SidebarItem icon={Building2} label="Companies" active={activeTab === 'companies'} onClick={() => setActiveTab('companies')} />
+            <SidebarItem icon={ArrowRightLeft} label="Inter-company Transfer" active={activeTab === 'transfer'} onClick={() => setActiveTab('transfer')} />
             <SidebarItem icon={History} label="Event Logs" active={activeTab === 'logs'} onClick={() => setActiveTab('logs')} />
           </div>
         </div>
@@ -590,6 +587,18 @@ export default function App() {
               <EventLogsView logs={eventLogs} />
             </div>
           )}
+          {activeTab === 'transfer' && (
+            <InterCompanyTransferView 
+              currentCompany={currentCompany}
+              companies={companies}
+              ledgers={ledgers}
+              transactions={transactions}
+              assets={assets}
+              onRefresh={fetchCompanyData}
+              currentUser={user}
+              showNotification={showNotification}
+            />
+          )}
         </div>
       </main>
     </div>
@@ -644,6 +653,35 @@ function DashboardView({ transactions, ledgers, assets, currentCompany }: { tran
   const totalDebit = transactions.reduce((sum, t) => sum + t.amount + t.tax_amount, 0);
   const totalAssets = assets.reduce((sum, a) => sum + a.value, 0);
   
+  // P&L Calculations
+  const incomeGroups = ['Direct Incomes', 'Indirect Incomes'];
+  const expenseGroups = ['Direct Expenses', 'Indirect Expenses'];
+
+  const plData = ledgers.reduce((acc, l) => {
+    if (incomeGroups.includes(l.group_name) || expenseGroups.includes(l.group_name)) {
+      const ledgerTransactions = transactions.filter(t => t.debit_ledger_id === l.id || t.credit_ledger_id === l.id);
+      const balance = ledgerTransactions.reduce((sum, t) => {
+        if (t.debit_ledger_id === l.id) return sum + t.amount;
+        if (t.credit_ledger_id === l.id) return sum - t.amount;
+        return sum;
+      }, 0);
+      
+      const adjustedBalance = incomeGroups.includes(l.group_name) ? -balance : balance;
+      
+      const existing = acc.find(item => item.group === l.group_name);
+      if (existing) {
+        existing.amount += adjustedBalance;
+      } else {
+        acc.push({ group: l.group_name, amount: adjustedBalance });
+      }
+    }
+    return acc;
+  }, [] as { group: string, amount: number }[]);
+
+  const totalIncome = plData.filter(d => incomeGroups.includes(d.group)).reduce((sum, d) => sum + d.amount, 0);
+  const totalExpenses = plData.filter(d => expenseGroups.includes(d.group)).reduce((sum, d) => sum + d.amount, 0);
+  const netProfit = totalIncome - totalExpenses;
+
   const chartData = transactions.slice(0, 7).reverse().map(t => ({
     name: format(new Date(t.date), 'MMM dd'),
     amount: t.amount + t.tax_amount
@@ -687,11 +725,13 @@ function DashboardView({ transactions, ledgers, assets, currentCompany }: { tran
         <Card className="p-6 dark:bg-zinc-900 dark:border-zinc-800">
           <div className="flex items-center justify-between mb-4">
             <div className="w-10 h-10 bg-zinc-100 dark:bg-zinc-800 rounded-lg flex items-center justify-center text-zinc-900 dark:text-zinc-100">
-              <BookOpen size={20} />
+              <TrendingUp size={20} className={netProfit >= 0 ? "text-emerald-500" : "text-red-500"} />
             </div>
           </div>
-          <p className="text-sm font-medium text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">Total Ledgers</p>
-          <h3 className="text-2xl font-bold text-zinc-900 dark:text-white mt-1">{ledgers.length}</h3>
+          <p className="text-sm font-medium text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">Net Profit</p>
+          <h3 className={`text-2xl font-bold mt-1 ${netProfit >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
+            {currentCompany?.currency_symbol || '₹'}{netProfit.toLocaleString()}
+          </h3>
         </Card>
 
         <Card className="p-6 dark:bg-zinc-900 dark:border-zinc-800">
@@ -704,6 +744,69 @@ function DashboardView({ transactions, ledgers, assets, currentCompany }: { tran
           <h3 className="text-2xl font-bold text-zinc-900 dark:text-white mt-1">{transactions.length}</h3>
         </Card>
       </div>
+
+      {/* Profit & Loss Section */}
+      <Card className="p-6 dark:bg-zinc-900 dark:border-zinc-800">
+        <div className="flex items-center justify-between mb-6">
+          <h4 className="text-sm font-bold text-zinc-900 dark:text-white uppercase tracking-widest">Profit & Loss Statement</h4>
+          <div className="flex items-center gap-2 px-3 py-1 bg-zinc-100 dark:bg-zinc-800 rounded-full">
+            <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Status:</span>
+            <span className={`text-xs font-bold ${netProfit >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+              {netProfit >= 0 ? "PROFITABLE" : "LOSS"}
+            </span>
+          </div>
+        </div>
+        
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
+          <div className="space-y-6">
+            <div>
+              <h5 className="text-xs font-bold text-zinc-400 uppercase tracking-wider mb-4">Income</h5>
+              <div className="space-y-3">
+                {plData.filter(d => incomeGroups.includes(d.group)).map(d => (
+                  <div key={d.group} className="flex justify-between items-center">
+                    <span className="text-sm text-zinc-600 dark:text-zinc-400">{d.group}</span>
+                    <span className="text-sm font-mono font-bold text-zinc-900 dark:text-white">{currentCompany?.currency_symbol}{d.amount.toLocaleString()}</span>
+                  </div>
+                ))}
+                <div className="pt-3 border-t border-zinc-100 dark:border-zinc-800 flex justify-between items-center">
+                  <span className="text-sm font-bold text-zinc-900 dark:text-white">Total Income</span>
+                  <span className="text-sm font-mono font-bold text-emerald-600 dark:text-emerald-400">{currentCompany?.currency_symbol}{totalIncome.toLocaleString()}</span>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <h5 className="text-xs font-bold text-zinc-400 uppercase tracking-wider mb-4">Expenses</h5>
+              <div className="space-y-3">
+                {plData.filter(d => expenseGroups.includes(d.group)).map(d => (
+                  <div key={d.group} className="flex justify-between items-center">
+                    <span className="text-sm text-zinc-600 dark:text-zinc-400">{d.group}</span>
+                    <span className="text-sm font-mono font-bold text-zinc-900 dark:text-white">{currentCompany?.currency_symbol}{d.amount.toLocaleString()}</span>
+                  </div>
+                ))}
+                <div className="pt-3 border-t border-zinc-100 dark:border-zinc-800 flex justify-between items-center">
+                  <span className="text-sm font-bold text-zinc-900 dark:text-white">Total Expenses</span>
+                  <span className="text-sm font-mono font-bold text-red-600 dark:text-red-400">{currentCompany?.currency_symbol}{totalExpenses.toLocaleString()}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex flex-col justify-center items-center p-8 bg-zinc-50 dark:bg-zinc-800/50 rounded-2xl border border-zinc-100 dark:border-zinc-800">
+            <p className="text-xs font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest mb-2">Net Result</p>
+            <h2 className={`text-4xl font-black ${netProfit >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
+              {currentCompany?.currency_symbol}{netProfit.toLocaleString()}
+            </h2>
+            <div className="mt-6 w-full max-w-[200px] h-2 bg-zinc-200 dark:bg-zinc-700 rounded-full overflow-hidden">
+              <div 
+                className={`h-full ${netProfit >= 0 ? "bg-emerald-500" : "bg-red-500"}`}
+                style={{ width: `${Math.min(100, (Math.abs(netProfit) / (totalIncome || 1)) * 100)}%` }}
+              />
+            </div>
+            <p className="mt-2 text-[10px] text-zinc-400 uppercase tracking-tighter">Profit Margin: {totalIncome > 0 ? ((netProfit / totalIncome) * 100).toFixed(1) : 0}%</p>
+          </div>
+        </div>
+      </Card>
 
       {/* Charts Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -1897,12 +2000,19 @@ function PurchaseOrdersView({ pos, type, onRefresh, currentCompany, currentUser,
             
             <div className="border-t border-zinc-200 dark:border-zinc-800 pt-4 mt-4">
               <h4 className="text-sm font-semibold text-zinc-900 dark:text-white mb-4">Items</h4>
-              <div className="grid grid-cols-1 md:grid-cols-5 gap-4 items-end mb-4">
+              <div className="grid grid-cols-1 md:grid-cols-6 gap-4 items-end mb-4">
                 <div className="md:col-span-2">
                   <Input label="Description" value={newItem.description} onChange={e => setNewItem({...newItem, description: e.target.value})} className="dark:bg-zinc-800 dark:border-zinc-700 dark:text-white" />
                 </div>
-                <Input label="Qty" type="number" value={newItem.quantity} onChange={e => setNewItem({...newItem, quantity: Number(e.target.value) || 0})} className="dark:bg-zinc-800 dark:border-zinc-700 dark:text-white" />
-                <Input label="Rate" type="number" step="0.01" value={newItem.rate} onChange={e => setNewItem({...newItem, rate: Number(e.target.value) || 0})} className="dark:bg-zinc-800 dark:border-zinc-700 dark:text-white" />
+                <Input label="Qty" type="number" value={newItem.quantity} onChange={e => {
+                  const qty = Number(e.target.value) || 0;
+                  setNewItem({...newItem, quantity: qty, amount: qty * newItem.rate});
+                }} className="dark:bg-zinc-800 dark:border-zinc-700 dark:text-white" />
+                <Input label="Rate" type="number" step="0.01" value={newItem.rate} onChange={e => {
+                  const rate = Number(e.target.value) || 0;
+                  setNewItem({...newItem, rate: rate, amount: newItem.quantity * rate});
+                }} className="dark:bg-zinc-800 dark:border-zinc-700 dark:text-white" />
+                <Input label="Amount" type="number" value={newItem.amount} readOnly className="dark:bg-zinc-800 dark:border-zinc-700 dark:text-white opacity-70" />
                 <Button type="button" variant="outline" onClick={handleAddItem} className="dark:border-zinc-700 dark:text-zinc-300">Add Item</Button>
               </div>
               
@@ -2160,12 +2270,19 @@ function GRNsView({ grns, pos, onRefresh, currentCompany, currentUser, showNotif
             
             <div className="border-t border-zinc-200 dark:border-zinc-800 pt-4 mt-4">
               <h4 className="text-sm font-semibold text-zinc-900 dark:text-white mb-4">Items Received</h4>
-              <div className="grid grid-cols-1 md:grid-cols-5 gap-4 items-end mb-4">
+              <div className="grid grid-cols-1 md:grid-cols-6 gap-4 items-end mb-4">
                 <div className="md:col-span-2">
                   <Input label="Description" value={newItem.description} onChange={e => setNewItem({...newItem, description: e.target.value})} className="dark:bg-zinc-800 dark:border-zinc-700 dark:text-white" />
                 </div>
-                <Input label="Qty" type="number" value={newItem.quantity} onChange={e => setNewItem({...newItem, quantity: Number(e.target.value) || 0})} className="dark:bg-zinc-800 dark:border-zinc-700 dark:text-white" />
-                <Input label="Rate" type="number" step="0.01" value={newItem.rate} onChange={e => setNewItem({...newItem, rate: Number(e.target.value) || 0})} className="dark:bg-zinc-800 dark:border-zinc-700 dark:text-white" />
+                <Input label="Qty" type="number" value={newItem.quantity} onChange={e => {
+                  const qty = Number(e.target.value) || 0;
+                  setNewItem({...newItem, quantity: qty, amount: qty * newItem.rate});
+                }} className="dark:bg-zinc-800 dark:border-zinc-700 dark:text-white" />
+                <Input label="Rate" type="number" step="0.01" value={newItem.rate} onChange={e => {
+                  const rate = Number(e.target.value) || 0;
+                  setNewItem({...newItem, rate: rate, amount: newItem.quantity * rate});
+                }} className="dark:bg-zinc-800 dark:border-zinc-700 dark:text-white" />
+                <Input label="Amount" type="number" value={newItem.amount} readOnly className="dark:bg-zinc-800 dark:border-zinc-700 dark:text-white opacity-70" />
                 <Button type="button" variant="outline" onClick={handleAddItem} className="dark:border-zinc-700 dark:text-zinc-300">Add Item</Button>
               </div>
               
@@ -2665,6 +2782,166 @@ function CompaniesView({ companies, onRefresh, currentUser, showNotification, ha
           </Card>
         ))}
       </div>
+    </div>
+  );
+}
+
+function InterCompanyTransferView({ 
+  currentCompany, 
+  companies, 
+  ledgers, 
+  transactions, 
+  assets, 
+  onRefresh, 
+  currentUser, 
+  showNotification 
+}: { 
+  currentCompany: Company | null, 
+  companies: Company[], 
+  ledgers: Ledger[], 
+  transactions: Transaction[], 
+  assets: Asset[], 
+  onRefresh: () => void, 
+  currentUser: User | null, 
+  showNotification: (m: string, t?: 'success' | 'error') => void 
+}) {
+  const [targetCompanyId, setTargetCompanyId] = useState<number | ''>('');
+  const [transferType, setTransferType] = useState<'ledger' | 'voucher' | 'asset'>('ledger');
+  const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  const [isTransferring, setIsTransferring] = useState(false);
+
+  const availableCompanies = companies.filter(c => c.id !== currentCompany?.id);
+
+  const items = transferType === 'ledger' ? ledgers : transferType === 'voucher' ? transactions : assets;
+
+  const toggleSelect = (id: number) => {
+    setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
+  };
+
+  const handleTransfer = async () => {
+    if (!targetCompanyId || selectedIds.length === 0) return;
+    setIsTransferring(true);
+    try {
+      const res = await fetch('/api/transfers/bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          target_company_id: Number(targetCompanyId),
+          type: transferType,
+          ids: selectedIds,
+          userId: currentUser?.id,
+          userName: currentUser?.username
+        })
+      });
+
+      if (res.ok) {
+        showNotification(`Successfully transferred ${selectedIds.length} ${transferType}(s)`);
+        setSelectedIds([]);
+        onRefresh();
+      } else {
+        showNotification("Transfer failed", "error");
+      }
+    } catch (err) {
+      showNotification("Connection error", "error");
+    } finally {
+      setIsTransferring(false);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <Card className="p-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-end">
+          <Select 
+            label="Target Company" 
+            value={targetCompanyId} 
+            onChange={e => setTargetCompanyId(e.target.value)}
+            options={availableCompanies.map(c => ({ value: c.id, label: c.name }))}
+            className="dark:bg-zinc-800 dark:border-zinc-700 dark:text-white"
+          />
+          <div className="flex gap-2">
+            <Button 
+              variant={transferType === 'ledger' ? 'primary' : 'outline'} 
+              onClick={() => { setTransferType('ledger'); setSelectedIds([]); }}
+              className="flex-1"
+            >Ledgers</Button>
+            <Button 
+              variant={transferType === 'voucher' ? 'primary' : 'outline'} 
+              onClick={() => { setTransferType('voucher'); setSelectedIds([]); }}
+              className="flex-1"
+            >Vouchers</Button>
+            <Button 
+              variant={transferType === 'asset' ? 'primary' : 'outline'} 
+              onClick={() => { setTransferType('asset'); setSelectedIds([]); }}
+              className="flex-1"
+            >Assets</Button>
+          </div>
+          <Button 
+            onClick={handleTransfer} 
+            disabled={!targetCompanyId || selectedIds.length === 0 || isTransferring}
+            className="w-full dark:bg-white dark:text-zinc-900"
+          >
+            {isTransferring ? 'Transferring...' : `Transfer Selected (${selectedIds.length})`}
+          </Button>
+        </div>
+      </Card>
+
+      <Card className="p-0">
+        <table className="w-full">
+          <thead>
+            <tr className="border-b border-zinc-200 dark:border-zinc-800">
+              <th className="px-6 py-3 text-left w-10">
+                <input 
+                  type="checkbox" 
+                  checked={selectedIds.length === items.length && items.length > 0}
+                  onChange={e => setSelectedIds(e.target.checked ? items.map(i => i.id) : [])}
+                  className="rounded border-zinc-300 dark:bg-zinc-800 dark:border-zinc-700"
+                />
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-semibold text-zinc-500 uppercase">Details</th>
+              {transferType === 'voucher' && <th className="px-6 py-3 text-right text-xs font-semibold text-zinc-500 uppercase">Amount</th>}
+              {transferType === 'asset' && <th className="px-6 py-3 text-right text-xs font-semibold text-zinc-500 uppercase">Value</th>}
+            </tr>
+          </thead>
+          <tbody>
+            {items.map(item => (
+              <tr key={item.id} className="border-b border-zinc-100 dark:border-zinc-800/50 hover:bg-zinc-50 dark:hover:bg-zinc-800/50">
+                <td className="px-6 py-4">
+                  <input 
+                    type="checkbox" 
+                    checked={selectedIds.includes(item.id)}
+                    onChange={() => toggleSelect(item.id)}
+                    className="rounded border-zinc-300 dark:bg-zinc-800 dark:border-zinc-700"
+                  />
+                </td>
+                <td className="px-6 py-4">
+                  <div className="text-sm font-medium text-zinc-900 dark:text-white">
+                    {'name' in item ? item.name : `Voucher #${item.id} - ${item.narration}`}
+                  </div>
+                  <div className="text-xs text-zinc-500 dark:text-zinc-400">
+                    {'group_name' in item ? item.group_name : 'date' in item ? item.date : `Depreciation: ${item.depreciation_rate}%`}
+                  </div>
+                </td>
+                {'amount' in item && (
+                  <td className="px-6 py-4 text-right text-sm font-mono text-zinc-900 dark:text-white">
+                    {currentCompany?.currency_symbol}{item.amount.toFixed(2)}
+                  </td>
+                )}
+                {'value' in item && (
+                  <td className="px-6 py-4 text-right text-sm font-mono text-zinc-900 dark:text-white">
+                    {currentCompany?.currency_symbol}{item.value.toFixed(2)}
+                  </td>
+                )}
+              </tr>
+            ))}
+            {items.length === 0 && (
+              <tr>
+                <td colSpan={4} className="px-6 py-8 text-center text-sm text-zinc-500 dark:text-zinc-400">No items available to transfer.</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </Card>
     </div>
   );
 }
