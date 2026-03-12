@@ -132,11 +132,20 @@ async function startServer() {
   });
 
   app.post('/api/companies', (req, res) => {
-    const { name, address, gstin, currency_symbol, userId, userName } = req.body;
+    const { name, address, gstin, currency_symbol, taxes, userId, userName } = req.body;
     try {
       const result = db.prepare('INSERT INTO companies (name, address, gstin, currency_symbol) VALUES (?, ?, ?, ?)').run(name, address, gstin, currency_symbol || '₹');
-      logEvent(userId, userName, 'CREATE', 'COMPANY', result.lastInsertRowid as number, `Created company: ${name}`);
-      res.json({ id: result.lastInsertRowid });
+      const companyId = result.lastInsertRowid as number;
+      
+      if (taxes && Array.isArray(taxes)) {
+        const insertTax = db.prepare('INSERT INTO taxes (company_id, name, rate) VALUES (?, ?, ?)');
+        for (const tax of taxes) {
+          insertTax.run(companyId, tax.name, tax.rate);
+        }
+      }
+      
+      logEvent(userId, userName, 'CREATE', 'COMPANY', companyId, `Created company: ${name}`);
+      res.json({ id: companyId });
     } catch (e) {
       res.status(400).json({ error: 'Company already exists' });
     }
@@ -159,6 +168,33 @@ async function startServer() {
     const result = db.prepare('INSERT INTO ledgers (company_id, name, group_name, opening_balance) VALUES (?, ?, ?, ?)').run(company_id, name, group_name, opening_balance);
     logEvent(userId, userName, 'CREATE', 'LEDGER', result.lastInsertRowid as number, `Created ledger: ${name}`);
     res.json({ id: result.lastInsertRowid });
+  });
+
+  app.post('/api/ledgers/bulk', (req, res) => {
+    const { ledgers, userId, userName } = req.body;
+    if (!Array.isArray(ledgers) || ledgers.length === 0) {
+      return res.status(400).json({ error: 'Invalid ledgers array' });
+    }
+
+    const insert = db.prepare('INSERT INTO ledgers (company_id, name, group_name, opening_balance) VALUES (?, ?, ?, ?)');
+    
+    const insertMany = db.transaction((ledgs) => {
+      let count = 0;
+      for (const l of ledgs) {
+        insert.run(l.company_id, l.name, l.group_name, l.opening_balance);
+        count++;
+      }
+      return count;
+    });
+
+    try {
+      const count = insertMany(ledgers);
+      logEvent(userId, userName, 'CREATE', 'LEDGER_BULK', null, `Imported ${count} ledgers`);
+      res.json({ success: true, count });
+    } catch (error) {
+      console.error('Bulk insert error:', error);
+      res.status(500).json({ error: 'Failed to import ledgers' });
+    }
   });
 
   app.put('/api/ledgers/:id', (req, res) => {
@@ -213,6 +249,33 @@ async function startServer() {
     res.json({ id: result.lastInsertRowid });
   });
 
+  app.post('/api/transactions/bulk', (req, res) => {
+    const { transactions, userId, userName } = req.body;
+    if (!Array.isArray(transactions) || transactions.length === 0) {
+      return res.status(400).json({ error: 'Invalid transactions array' });
+    }
+
+    const insert = db.prepare('INSERT INTO transactions (company_id, date, debit_ledger_id, credit_ledger_id, amount, tax_id, tax_amount, narration) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
+    
+    const insertMany = db.transaction((txs) => {
+      let count = 0;
+      for (const tx of txs) {
+        insert.run(tx.company_id, tx.date, tx.debit_ledger_id, tx.credit_ledger_id, tx.amount, tx.tax_id || null, tx.tax_amount || 0, tx.narration);
+        count++;
+      }
+      return count;
+    });
+
+    try {
+      const count = insertMany(transactions);
+      logEvent(userId, userName, 'CREATE', 'TRANSACTION_BULK', null, `Imported ${count} transactions`);
+      res.json({ success: true, count });
+    } catch (error) {
+      console.error('Bulk insert error:', error);
+      res.status(500).json({ error: 'Failed to import transactions' });
+    }
+  });
+
   app.put('/api/transactions/:id', (req, res) => {
     const { date, debit_ledger_id, credit_ledger_id, amount, tax_id, tax_amount, narration, userId, userName } = req.body;
     db.prepare('UPDATE transactions SET date = ?, debit_ledger_id = ?, credit_ledger_id = ?, amount = ?, tax_id = ?, tax_amount = ?, narration = ? WHERE id = ?').run(date, debit_ledger_id, credit_ledger_id, amount, tax_id, tax_amount, narration, req.params.id);
@@ -230,6 +293,33 @@ async function startServer() {
     const result = db.prepare('INSERT INTO assets (company_id, name, value, purchase_date, depreciation_rate) VALUES (?, ?, ?, ?, ?)').run(company_id, name, value, purchase_date, depreciation_rate);
     logEvent(userId, userName, 'CREATE', 'ASSET', result.lastInsertRowid as number, `Created asset: ${name}`);
     res.json({ id: result.lastInsertRowid });
+  });
+
+  app.post('/api/assets/bulk', (req, res) => {
+    const { assets, userId, userName } = req.body;
+    if (!Array.isArray(assets) || assets.length === 0) {
+      return res.status(400).json({ error: 'Invalid assets array' });
+    }
+
+    const insert = db.prepare('INSERT INTO assets (company_id, name, value, purchase_date, depreciation_rate) VALUES (?, ?, ?, ?, ?)');
+    
+    const insertMany = db.transaction((asts) => {
+      let count = 0;
+      for (const a of asts) {
+        insert.run(a.company_id, a.name, a.value, a.purchase_date, a.depreciation_rate);
+        count++;
+      }
+      return count;
+    });
+
+    try {
+      const count = insertMany(assets);
+      logEvent(userId, userName, 'CREATE', 'ASSET_BULK', null, `Imported ${count} assets`);
+      res.json({ success: true, count });
+    } catch (error) {
+      console.error('Bulk insert error:', error);
+      res.status(500).json({ error: 'Failed to import assets' });
+    }
   });
 
   app.put('/api/assets/:id', (req, res) => {

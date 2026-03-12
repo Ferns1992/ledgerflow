@@ -19,7 +19,8 @@ import {
   Moon,
   Trash2,
   Edit,
-  History
+  History,
+  Upload
 } from 'lucide-react';
 import { 
   BarChart, 
@@ -37,6 +38,7 @@ import * as XLSX from 'xlsx';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { format } from 'date-fns';
+import Papa from 'papaparse';
 import { cn, User, Company, Ledger, Transaction, Asset, Tax } from './types';
 
 // --- Components ---
@@ -780,6 +782,81 @@ function LedgersView({ ledgers, onRefresh, currentCompany, currentUser, showNoti
     );
   };
 
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
+
+  const handleImportCSV = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!currentCompany) {
+      showNotification("Please select a company first", "error");
+      return;
+    }
+
+    Papa.parse(file, {
+      header: true,
+      skipEmptyLines: true,
+      complete: async (results) => {
+        const parsedLedgers = [];
+        let errors = 0;
+
+        for (const row of results.data as any[]) {
+          const name = row['Name']?.trim();
+          const group_name = row['Group']?.trim() || 'Direct Expenses';
+          const opening_balance = parseFloat(row['Opening Balance']) || 0;
+
+          if (!name) {
+            errors++;
+            continue;
+          }
+
+          parsedLedgers.push({
+            company_id: currentCompany.id,
+            name,
+            group_name,
+            opening_balance,
+            userId: currentUser?.id,
+            userName: currentUser?.username
+          });
+        }
+
+        if (parsedLedgers.length === 0) {
+          showNotification("No valid ledgers found in CSV", "error");
+          return;
+        }
+
+        try {
+          const res = await fetch('/api/ledgers/bulk', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+              ledgers: parsedLedgers,
+              userId: currentUser?.id,
+              userName: currentUser?.username
+            })
+          });
+
+          if (res.ok) {
+            const data = await res.json();
+            showNotification(`Successfully imported ${data.count} ledgers. ${errors > 0 ? `Skipped ${errors} invalid rows.` : ''}`);
+            onRefresh();
+          } else {
+            showNotification("Failed to import ledgers", "error");
+          }
+        } catch (error) {
+          showNotification("Error importing ledgers", "error");
+        }
+        
+        if (fileInputRef.current) {
+          fileInputRef.current.value = '';
+        }
+      },
+      error: (error) => {
+        showNotification(`Error parsing CSV: ${error.message}`, "error");
+      }
+    });
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -787,6 +864,16 @@ function LedgersView({ ledgers, onRefresh, currentCompany, currentUser, showNoti
           <Button onClick={() => setShowAdd(true)} className="flex items-center gap-2 dark:bg-white dark:text-zinc-900">
             <Plus size={16} />
             Create Ledger
+          </Button>
+          <input
+            type="file"
+            accept=".csv"
+            ref={fileInputRef}
+            onChange={handleImportCSV}
+            className="hidden"
+          />
+          <Button variant="outline" onClick={() => fileInputRef.current?.click()} className="flex items-center gap-2 dark:border-zinc-800 dark:text-zinc-300">
+            <Upload size={14} /> Import CSV
           </Button>
         </div>
         <div className="flex items-center gap-2">
@@ -952,13 +1039,99 @@ function VouchersView({ transactions, ledgers, taxes, onRefresh, currentCompany,
     );
   };
 
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
+
+  const handleImportCSV = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!currentCompany) {
+      showNotification("Please select a company first", "error");
+      return;
+    }
+
+    Papa.parse(file, {
+      header: true,
+      skipEmptyLines: true,
+      complete: async (results) => {
+        const parsedTransactions = [];
+        let errors = 0;
+
+        for (const row of results.data as any[]) {
+          const debitLedger = ledgers.find(l => l.name.toLowerCase() === row['Debit Ledger']?.trim().toLowerCase());
+          const creditLedger = ledgers.find(l => l.name.toLowerCase() === row['Credit Ledger']?.trim().toLowerCase());
+          const amount = parseFloat(row['Amount']);
+          const date = row['Date'];
+          const narration = row['Narration'] || '';
+
+          if (!debitLedger || !creditLedger || isNaN(amount) || !date) {
+            errors++;
+            continue;
+          }
+
+          parsedTransactions.push({
+            company_id: currentCompany.id,
+            date,
+            debit_ledger_id: debitLedger.id,
+            credit_ledger_id: creditLedger.id,
+            amount,
+            tax_id: null,
+            tax_amount: 0,
+            narration,
+            userId: currentUser?.id,
+            userName: currentUser?.username
+          });
+        }
+
+        if (parsedTransactions.length === 0) {
+          showNotification("No valid transactions found in CSV. Ensure headers are: Date, Debit Ledger, Credit Ledger, Amount, Narration", "error");
+          return;
+        }
+
+        try {
+          const res = await fetch('/api/transactions/bulk', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ transactions: parsedTransactions, userId: currentUser?.id, userName: currentUser?.username })
+          });
+
+          if (res.ok) {
+            const data = await res.json();
+            showNotification(`Successfully imported ${data.count} transactions.${errors > 0 ? ` Skipped ${errors} invalid rows.` : ''}`);
+            onRefresh();
+          } else {
+            showNotification("Failed to import transactions", "error");
+          }
+        } catch (error) {
+          showNotification("Error importing transactions", "error");
+        }
+        
+        if (fileInputRef.current) {
+          fileInputRef.current.value = '';
+        }
+      }
+    });
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <Button onClick={() => setShowAdd(true)} className="flex items-center gap-2 dark:bg-white dark:text-zinc-900">
-          <Plus size={16} />
-          New Voucher
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button onClick={() => setShowAdd(true)} className="flex items-center gap-2 dark:bg-white dark:text-zinc-900">
+            <Plus size={16} />
+            New Voucher
+          </Button>
+          <input 
+            type="file" 
+            accept=".csv" 
+            ref={fileInputRef} 
+            onChange={handleImportCSV} 
+            className="hidden" 
+          />
+          <Button variant="outline" onClick={() => fileInputRef.current?.click()} className="flex items-center gap-2 dark:border-zinc-800 dark:text-zinc-300">
+            <Upload size={14} /> Import CSV
+          </Button>
+        </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" onClick={exportExcel} className="flex items-center gap-2 dark:border-zinc-800 dark:text-zinc-300">
             <Download size={14} /> Excel
@@ -1115,13 +1288,102 @@ function AssetsView({ assets, onRefresh, currentCompany, currentUser, showNotifi
     );
   };
 
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
+
+  const handleImportCSV = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!currentCompany) {
+      showNotification("Please select a company first", "error");
+      return;
+    }
+
+    Papa.parse(file, {
+      header: true,
+      skipEmptyLines: true,
+      complete: async (results) => {
+        const parsedAssets = [];
+        let errors = 0;
+
+        for (const row of results.data as any[]) {
+          const name = row['Name']?.trim();
+          const value = parseFloat(row['Value']);
+          const purchase_date = row['Purchase Date'];
+          const depreciation_rate = parseFloat(row['Depreciation Rate']) || 10;
+
+          if (!name || isNaN(value) || !purchase_date) {
+            errors++;
+            continue;
+          }
+
+          parsedAssets.push({
+            company_id: currentCompany.id,
+            name,
+            value,
+            purchase_date,
+            depreciation_rate,
+            userId: currentUser?.id,
+            userName: currentUser?.username
+          });
+        }
+
+        if (parsedAssets.length === 0) {
+          showNotification("No valid assets found in CSV", "error");
+          return;
+        }
+
+        try {
+          const res = await fetch('/api/assets/bulk', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+              assets: parsedAssets,
+              userId: currentUser?.id,
+              userName: currentUser?.username
+            })
+          });
+
+          if (res.ok) {
+            const data = await res.json();
+            showNotification(`Successfully imported ${data.count} assets. ${errors > 0 ? `Skipped ${errors} invalid rows.` : ''}`);
+            onRefresh();
+          } else {
+            showNotification("Failed to import assets", "error");
+          }
+        } catch (error) {
+          showNotification("Error importing assets", "error");
+        }
+        
+        if (fileInputRef.current) {
+          fileInputRef.current.value = '';
+        }
+      },
+      error: (error) => {
+        showNotification(`Error parsing CSV: ${error.message}`, "error");
+      }
+    });
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <Button onClick={() => setShowAdd(true)} className="flex items-center gap-2 dark:bg-white dark:text-zinc-900">
-          <Plus size={16} />
-          Add Asset
-        </Button>
+        <div className="flex items-center gap-3">
+          <Button onClick={() => setShowAdd(true)} className="flex items-center gap-2 dark:bg-white dark:text-zinc-900">
+            <Plus size={16} />
+            Add Asset
+          </Button>
+          <input
+            type="file"
+            accept=".csv"
+            ref={fileInputRef}
+            onChange={handleImportCSV}
+            className="hidden"
+          />
+          <Button variant="outline" onClick={() => fileInputRef.current?.click()} className="flex items-center gap-2 dark:border-zinc-800 dark:text-zinc-300">
+            <Upload size={14} /> Import CSV
+          </Button>
+        </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" onClick={exportExcel} className="flex items-center gap-2 dark:border-zinc-800 dark:text-zinc-300">
             <Download size={14} /> Excel
@@ -1386,7 +1648,33 @@ function TaxesView({ taxes, onRefresh, currentCompany, currentUser, showNotifica
 
       {showAdd && (
         <Card className="p-6 border-zinc-900/20 bg-zinc-50/50 dark:bg-zinc-900 dark:border-zinc-800">
-          <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+          <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+            <Select 
+              label="Quick Select Predefined Tax" 
+              value=""
+              onChange={e => {
+                const val = e.target.value;
+                if (val) {
+                  const [name, rate] = val.split('|');
+                  setForm({ ...form, name, rate: parseFloat(rate) });
+                }
+              }}
+              className="dark:bg-zinc-800 dark:border-zinc-700 dark:text-white"
+              options={[
+                { value: 'GST 0%|0', label: 'GST 0%' },
+                { value: 'GST 5%|5', label: 'GST 5%' },
+                { value: 'GST 12%|12', label: 'GST 12%' },
+                { value: 'GST 18%|18', label: 'GST 18%' },
+                { value: 'GST 28%|28', label: 'GST 28%' },
+                { value: 'VAT 5%|5', label: 'VAT 5%' },
+                { value: 'VAT 10%|10', label: 'VAT 10%' },
+                { value: 'VAT 20%|20', label: 'VAT 20%' },
+                { value: 'Sales Tax 6%|6', label: 'Sales Tax 6%' },
+                { value: 'Sales Tax 7%|7', label: 'Sales Tax 7%' },
+                { value: 'Sales Tax 8%|8', label: 'Sales Tax 8%' },
+                { value: 'Exempt|0', label: 'Exempt (0%)' },
+              ]}
+            />
             <Input label="Tax Name" value={form.name} onChange={e => setForm({...form, name: e.target.value})} required className="dark:bg-zinc-800 dark:border-zinc-700 dark:text-white" />
             <Input label="Rate (%)" type="number" step="0.01" value={form.rate} onChange={e => setForm({...form, rate: parseFloat(e.target.value)})} required className="dark:bg-zinc-800 dark:border-zinc-700 dark:text-white" />
             <div className="flex justify-end gap-2">
@@ -1429,7 +1717,19 @@ function TaxesView({ taxes, onRefresh, currentCompany, currentUser, showNotifica
 function CompaniesView({ companies, onRefresh, currentUser, showNotification, handleConfirm }: { companies: Company[], onRefresh: () => void, currentUser: User | null, showNotification: (m: string, t?: 'success' | 'error') => void, handleConfirm: (t: string, m: string, c: () => void) => void }) {
   const [showAdd, setShowAdd] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
-  const [form, setForm] = useState({ name: '', address: '', gstin: '', currency_symbol: '₹' });
+  const [form, setForm] = useState({ name: '', address: '', gstin: '', currency_symbol: '₹', taxes: [] as {name: string, rate: number}[] });
+  const [newTax, setNewTax] = useState({ name: '', rate: 0 });
+
+  const handleAddTax = () => {
+    if (newTax.name && newTax.rate >= 0) {
+      setForm({ ...form, taxes: [...form.taxes, newTax] });
+      setNewTax({ name: '', rate: 0 });
+    }
+  };
+
+  const handleRemoveTax = (index: number) => {
+    setForm({ ...form, taxes: form.taxes.filter((_, i) => i !== index) });
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1448,7 +1748,8 @@ function CompaniesView({ companies, onRefresh, currentUser, showNotification, ha
     
     if (res.ok) {
       showNotification(editingId ? "Company updated successfully" : "Company created successfully");
-      setForm({ name: '', address: '', gstin: '', currency_symbol: '₹' });
+      setForm({ name: '', address: '', gstin: '', currency_symbol: '₹', taxes: [] });
+      setNewTax({ name: '', rate: 0 });
       setShowAdd(false);
       setEditingId(null);
       onRefresh();
@@ -1458,7 +1759,7 @@ function CompaniesView({ companies, onRefresh, currentUser, showNotification, ha
   };
 
   const handleEdit = (c: Company) => {
-    setForm({ name: c.name, address: c.address, gstin: c.gstin, currency_symbol: c.currency_symbol });
+    setForm({ name: c.name, address: c.address, gstin: c.gstin, currency_symbol: c.currency_symbol, taxes: [] });
     setEditingId(c.id);
     setShowAdd(true);
   };
@@ -1490,13 +1791,94 @@ function CompaniesView({ companies, onRefresh, currentUser, showNotification, ha
 
       {showAdd && (
         <Card className="p-6 border-zinc-900/20 bg-zinc-50/50 dark:bg-zinc-900 dark:border-zinc-800">
-          <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
-            <Input label="Company Name" value={form.name} onChange={e => setForm({...form, name: e.target.value})} required className="dark:bg-zinc-800 dark:border-zinc-700 dark:text-white" />
-            <Input label="Address" value={form.address} onChange={e => setForm({...form, address: e.target.value})} required className="dark:bg-zinc-800 dark:border-zinc-700 dark:text-white" />
-            <Input label="GSTIN" value={form.gstin} onChange={e => setForm({...form, gstin: e.target.value})} required className="dark:bg-zinc-800 dark:border-zinc-700 dark:text-white" />
-            <Input label="Currency Symbol" value={form.currency_symbol} onChange={e => setForm({...form, currency_symbol: e.target.value})} required className="dark:bg-zinc-800 dark:border-zinc-700 dark:text-white" />
-            <div className="md:col-span-4 flex justify-end gap-2">
-              <Button variant="outline" onClick={() => { setShowAdd(false); setEditingId(null); setForm({ name: '', address: '', gstin: '', currency_symbol: '₹' }); }} className="dark:border-zinc-700 dark:text-zinc-300">Cancel</Button>
+          <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-4 gap-4 items-start">
+            <div className="md:col-span-4 grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+              <Input label="Company Name" value={form.name} onChange={e => setForm({...form, name: e.target.value})} required className="dark:bg-zinc-800 dark:border-zinc-700 dark:text-white" />
+              <Input label="Address" value={form.address} onChange={e => setForm({...form, address: e.target.value})} required className="dark:bg-zinc-800 dark:border-zinc-700 dark:text-white" />
+              <Input label="GSTIN" value={form.gstin} onChange={e => setForm({...form, gstin: e.target.value})} required className="dark:bg-zinc-800 dark:border-zinc-700 dark:text-white" />
+              <Select 
+                label="Currency" 
+                value={form.currency_symbol} 
+                onChange={e => setForm({...form, currency_symbol: e.target.value})}
+                required
+                className="dark:bg-zinc-800 dark:border-zinc-700 dark:text-white"
+                options={[
+                  { value: '$', label: 'USD ($)' },
+                  { value: '€', label: 'EUR (€)' },
+                  { value: '£', label: 'GBP (£)' },
+                  { value: '₹', label: 'INR (₹)' },
+                  { value: 'A$', label: 'AUD (A$)' },
+                  { value: 'C$', label: 'CAD (C$)' },
+                  { value: '¥', label: 'JPY/CNY (¥)' },
+                  { value: 'S$', label: 'SGD (S$)' },
+                  { value: 'NZ$', label: 'NZD (NZ$)' },
+                  { value: 'R', label: 'ZAR (R)' },
+                  { value: 'د.إ', label: 'AED (د.إ)' },
+                  { value: '﷼', label: 'SAR (﷼)' },
+                  { value: 'CHF', label: 'CHF (CHF)' },
+                  { value: 'HK$', label: 'HKD (HK$)' },
+                  { value: 'kr', label: 'SEK/NOK/DKK (kr)' },
+                  { value: '₩', label: 'KRW (₩)' },
+                  { value: 'R$', label: 'BRL (R$)' },
+                  { value: '₽', label: 'RUB (₽)' },
+                  { value: '₺', label: 'TRY (₺)' },
+                ]}
+              />
+            </div>
+
+            {!editingId && (
+              <div className="md:col-span-4 border-t border-zinc-200 dark:border-zinc-800 pt-4 mt-2">
+                <h4 className="text-sm font-semibold text-zinc-900 dark:text-white mb-4">Initial Tax Rates (Optional)</h4>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end mb-4">
+                  <Select 
+                    label="Quick Select Predefined Tax" 
+                    value=""
+                    onChange={e => {
+                      const val = e.target.value;
+                      if (val) {
+                        const [name, rate] = val.split('|');
+                        setNewTax({ name, rate: parseFloat(rate) });
+                      }
+                    }}
+                    className="dark:bg-zinc-800 dark:border-zinc-700 dark:text-white"
+                    options={[
+                      { value: 'GST 0%|0', label: 'GST 0%' },
+                      { value: 'GST 5%|5', label: 'GST 5%' },
+                      { value: 'GST 12%|12', label: 'GST 12%' },
+                      { value: 'GST 18%|18', label: 'GST 18%' },
+                      { value: 'GST 28%|28', label: 'GST 28%' },
+                      { value: 'VAT 5%|5', label: 'VAT 5%' },
+                      { value: 'VAT 10%|10', label: 'VAT 10%' },
+                      { value: 'VAT 20%|20', label: 'VAT 20%' },
+                      { value: 'Sales Tax 6%|6', label: 'Sales Tax 6%' },
+                      { value: 'Sales Tax 7%|7', label: 'Sales Tax 7%' },
+                      { value: 'Sales Tax 8%|8', label: 'Sales Tax 8%' },
+                      { value: 'Exempt|0', label: 'Exempt (0%)' },
+                    ]}
+                  />
+                  <Input label="Manual Tax Name" value={newTax.name} onChange={e => setNewTax({...newTax, name: e.target.value})} className="dark:bg-zinc-800 dark:border-zinc-700 dark:text-white" />
+                  <Input label="Rate (%)" type="number" step="0.01" value={newTax.rate} onChange={e => setNewTax({...newTax, rate: parseFloat(e.target.value)})} className="dark:bg-zinc-800 dark:border-zinc-700 dark:text-white" />
+                  <Button type="button" variant="outline" onClick={handleAddTax} className="dark:border-zinc-700 dark:text-zinc-300">Add Tax</Button>
+                </div>
+                
+                {form.taxes.length > 0 && (
+                  <div className="flex flex-wrap gap-2">
+                    {form.taxes.map((t, i) => (
+                      <div key={i} className="flex items-center gap-2 bg-zinc-100 dark:bg-zinc-800 px-3 py-1.5 rounded-full text-sm">
+                        <span className="font-medium dark:text-zinc-900 dark:text-zinc-100">{t.name}</span>
+                        <span className="text-zinc-500 dark:text-zinc-400">({t.rate}%)</span>
+                        <button type="button" onClick={() => handleRemoveTax(i)} className="text-red-500 hover:text-red-700 ml-1">
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="md:col-span-4 flex justify-end gap-2 mt-4">
+              <Button variant="outline" onClick={() => { setShowAdd(false); setEditingId(null); setForm({ name: '', address: '', gstin: '', currency_symbol: '₹', taxes: [] }); setNewTax({ name: '', rate: 0 }); }} className="dark:border-zinc-700 dark:text-zinc-300">Cancel</Button>
               <Button type="submit" className="dark:bg-white dark:text-zinc-900">{editingId ? 'Update Company' : 'Save Company'}</Button>
             </div>
           </form>
