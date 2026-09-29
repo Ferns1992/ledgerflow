@@ -28,7 +28,9 @@ const PH = {
   name: 'Manila Ledger Works Inc.',
   gstin: '000-123-456-00000',
   address: '123 Makati Avenue, Makati City, Metro Manila 1200',
-  currency_symbol: '₿',
+  // U+20B1 PESO SIGN. Not U+20BF, which is the Bitcoin sign and was an easy
+  // slip to make since the two glyphs are nearly identical.
+  currency_symbol: '₱',
 };
 
 // --- Ledger groups ---------------------------------------------------------
@@ -247,35 +249,35 @@ function seedIndia() {
   addVouchers(cid, L, T, [
     // Opening receivables collected
     { date: monthsBack(5), dr: 'HDFC Current Account', cr: 'Trade Receivables', amount: 412000, narration: 'Collections against FY opening receivables' },
-    { date: monthsBack(5), dr: 'Textile Sales', cr: 'Trade Receivables', amount: 685000, narration: 'B2B fabric supply, Surat order' },
+    { date: monthsBack(5), dr: 'Trade Receivables', cr: 'Textile Sales', amount: 685000, narration: 'B2B fabric supply, Surat order' },
     { date: monthsBack(5), dr: 'Fabric Purchases', cr: 'HDFC Current Account', amount: 298000, narration: 'Raw cotton purchase, Gujarat' },
     { date: monthsBack(5), dr: 'Freight and Logistics', cr: 'HDFC Current Account', amount: 18400, narration: 'Inbound freight' },
     { date: monthsBack(5), dr: 'Factory Rent', cr: 'HDFC Current Account', amount: 85000, narration: 'Factory shed rent' },
     { date: monthsBack(5), dr: 'Employee Salaries', cr: 'HDFC Current Account', amount: 214000, narration: 'Shop floor payroll' },
     { date: monthsBack(5), dr: 'Power and Water', cr: 'HDFC Current Account', amount: 42800, narration: 'MSEDCL electricity' },
 
-    { date: monthsBack(4), dr: 'Textile Sales', cr: 'Trade Receivables', amount: 742000, narration: 'Export order, Dubai' },
-    { date: monthsBack(4), dr: 'Job Work Income', cr: 'Trade Receivables', amount: 186000, narration: 'Job work for Malpani Textiles' },
+    { date: monthsBack(4), dr: 'Trade Receivables', cr: 'Textile Sales', amount: 742000, narration: 'Export order, Dubai' },
+    { date: monthsBack(4), dr: 'Trade Receivables', cr: 'Job Work Income', amount: 186000, narration: 'Job work for Malpani Textiles' },
     { date: monthsBack(4), dr: 'Fabric Purchases', cr: 'HDFC Current Account', amount: 344000, narration: 'Processed fabric, Ichalkaranji' },
     { date: monthsBack(4), dr: 'Freight and Logistics', cr: 'HDFC Current Account', amount: 21200, narration: 'Outbound to JNPT port' },
     { date: monthsBack(4), dr: 'Employee Salaries', cr: 'HDFC Current Account', amount: 221000, narration: 'Shop floor payroll' },
     { date: monthsBack(4), dr: 'Power and Water', cr: 'HDFC Current Account', amount: 46100, narration: 'MSEDCL electricity' },
 
-    { date: monthsBack(3), dr: 'Textile Sales', cr: 'Trade Receivables', amount: 826000, narration: 'Domestic wholesale, multiple lots', tax: 'CGST 9%', taxAmount: 37170 },
-    { date: monthsBack(3), dr: 'Job Work Income', cr: 'Trade Receivables', amount: 242000, narration: 'Job work, Kutch cluster' },
+    { date: monthsBack(3), dr: 'Trade Receivables', cr: 'Textile Sales', amount: 826000, narration: 'Domestic wholesale, multiple lots', tax: 'CGST 9%', taxAmount: 37170 },
+    { date: monthsBack(3), dr: 'Trade Receivables', cr: 'Job Work Income', amount: 242000, narration: 'Job work, Kutch cluster' },
     { date: monthsBack(3), dr: 'Fabric Purchases', cr: 'HDFC Current Account', amount: 389000, narration: 'Yarn purchase, Ahmedabad' },
     { date: monthsBack(3), dr: 'Factory Rent', cr: 'HDFC Current Account', amount: 85000, narration: 'Factory shed rent' },
     { date: monthsBack(3), dr: 'Employee Salaries', cr: 'HDFC Current Account', amount: 228000, narration: 'Shop floor payroll' },
     { date: monthsBack(3), dr: 'Power and Water', cr: 'HDFC Current Account', amount: 48900, narration: 'MSEDCL electricity' },
 
-    { date: monthsBack(2), dr: 'Textile Sales', cr: 'Trade Receivables', amount: 903000, narration: 'Bulk order, Chennai', tax: 'IGST 18%', taxAmount: 68818.5 },
-    { date: monthsBack(2), dr: 'Job Work Income', cr: 'Trade Receivables', amount: 198000, narration: 'Job work, Ludhiana' },
+    { date: monthsBack(2), dr: 'Trade Receivables', cr: 'Textile Sales', amount: 903000, narration: 'Bulk order, Chennai', tax: 'IGST 18%', taxAmount: 68818.5 },
+    { date: monthsBack(2), dr: 'Trade Receivables', cr: 'Job Work Income', amount: 198000, narration: 'Job work, Ludhiana' },
     { date: monthsBack(2), dr: 'Fabric Purchases', cr: 'HDFC Current Account', amount: 412000, narration: 'Grey fabric purchase' },
     { date: monthsBack(2), dr: 'Freight and Logistics', cr: 'HDFC Current Account', amount: 24900, narration: 'Outbound logistics' },
     { date: monthsBack(2), dr: 'Employee Salaries', cr: 'HDFC Current Account', amount: 235000, narration: 'Shop floor payroll' },
 
-    { date: monthsBack(1), dr: 'Textile Sales', cr: 'Trade Receivables', amount: 968000, narration: 'Domestic wholesale, quarterly lot', tax: 'IGST 18%', taxAmount: 73852.8 },
-    { date: monthsBack(1), dr: 'Job Work Income', cr: 'Trade Receivables', amount: 214000, narration: 'Job work, Tiruppur' },
+    { date: monthsBack(1), dr: 'Trade Receivables', cr: 'Textile Sales', amount: 968000, narration: 'Domestic wholesale, quarterly lot', tax: 'IGST 18%', taxAmount: 73852.8 },
+    { date: monthsBack(1), dr: 'Trade Receivables', cr: 'Job Work Income', amount: 214000, narration: 'Job work, Tiruppur' },
     { date: monthsBack(1), dr: 'Fabric Purchases', cr: 'HDFC Current Account', amount: 438000, narration: 'Finished fabric, Coimbatore' },
     { date: monthsBack(1), dr: 'Factory Rent', cr: 'HDFC Current Account', amount: 85000, narration: 'Factory shed rent' },
     { date: monthsBack(1), dr: 'Employee Salaries', cr: 'HDFC Current Account', amount: 241000, narration: 'Shop floor payroll' },
@@ -331,36 +333,36 @@ function seedPhilippines() {
 
   addVouchers(cid, L, T, [
     { date: monthsBack(5), dr: 'BDO Checking Account', cr: 'Accounts Receivable', amount: 268000, narration: 'Collection of opening receivables' },
-    { date: monthsBack(5), dr: 'Service Revenue', cr: 'Accounts Receivable', amount: 342000, narration: 'Bookkeeping retainer, 12 clients', tax: 'VAT 12%', taxAmount: 41040 },
-    { date: monthsBack(5), dr: 'Retail Sales', cr: 'Cash on Hand', amount: 128400, narration: 'Walk-in supply sales' },
+    { date: monthsBack(5), dr: 'Accounts Receivable', cr: 'Service Revenue', amount: 342000, narration: 'Bookkeeping retainer, 12 clients', tax: 'VAT 12%', taxAmount: 41040 },
+    { date: monthsBack(5), dr: 'Cash on Hand', cr: 'Retail Sales', amount: 128400, narration: 'Walk-in supply sales' },
     { date: monthsBack(5), dr: 'Supplies and Materials', cr: 'BDO Checking Account', amount: 96500, narration: 'Paper and printing supplies' },
     { date: monthsBack(5), dr: 'Office Rent', cr: 'BDO Checking Account', amount: 78000, narration: 'Unit 8B lease, monthly' },
     { date: monthsBack(5), dr: 'Staff Salaries', cr: 'BDO Checking Account', amount: 186000, narration: 'Payroll for 6 staff' },
     { date: monthsBack(5), dr: 'Utilities', cr: 'BDO Checking Account', amount: 24300, narration: 'Meralco and water' },
 
-    { date: monthsBack(4), dr: 'Service Revenue', cr: 'Accounts Receivable', amount: 388000, narration: 'Payroll processing engagement', tax: 'VAT 12%', taxAmount: 46560 },
-    { date: monthsBack(4), dr: 'Retail Sales', cr: 'Cash on Hand', amount: 142600, narration: 'Walk-in supply sales' },
+    { date: monthsBack(4), dr: 'Accounts Receivable', cr: 'Service Revenue', amount: 388000, narration: 'Payroll processing engagement', tax: 'VAT 12%', taxAmount: 46560 },
+    { date: monthsBack(4), dr: 'Cash on Hand', cr: 'Retail Sales', amount: 142600, narration: 'Walk-in supply sales' },
     { date: monthsBack(4), dr: 'Professional Fees', cr: 'BDO Checking Account', amount: 45000, narration: 'CPAs, quarterly engagement' },
     { date: monthsBack(4), dr: 'Supplies and Materials', cr: 'BDO Checking Account', amount: 88200, narration: 'Consumables restock' },
     { date: monthsBack(4), dr: 'Staff Salaries', cr: 'BDO Checking Account', amount: 192000, narration: 'Payroll for 6 staff' },
     { date: monthsBack(4), dr: 'Utilities', cr: 'BDO Checking Account', amount: 25900, narration: 'Meralco and water' },
 
-    { date: monthsBack(3), dr: 'Service Revenue', cr: 'Accounts Receivable', amount: 412000, narration: 'BIR compliance filings, 18 clients', tax: 'VAT 12%', taxAmount: 49440 },
-    { date: monthsBack(3), dr: 'Retail Sales', cr: 'Cash on Hand', amount: 151200, narration: 'Walk-in supply sales' },
+    { date: monthsBack(3), dr: 'Accounts Receivable', cr: 'Service Revenue', amount: 412000, narration: 'BIR compliance filings, 18 clients', tax: 'VAT 12%', taxAmount: 49440 },
+    { date: monthsBack(3), dr: 'Cash on Hand', cr: 'Retail Sales', amount: 151200, narration: 'Walk-in supply sales' },
     { date: monthsBack(3), dr: 'Supplies and Materials', cr: 'BDO Checking Account', amount: 101400, narration: 'Consumables restock' },
     { date: monthsBack(3), dr: 'Office Rent', cr: 'BDO Checking Account', amount: 78000, narration: 'Unit 8B lease, monthly' },
     { date: monthsBack(3), dr: 'Staff Salaries', cr: 'BDO Checking Account', amount: 196000, narration: 'Payroll for 6 staff' },
     { date: monthsBack(3), dr: 'Utilities', cr: 'BDO Checking Account', amount: 27100, narration: 'Meralco and water' },
 
-    { date: monthsBack(2), dr: 'Service Revenue', cr: 'Accounts Receivable', amount: 468000, narration: 'Audit prep and advisory', tax: 'VAT 12%', taxAmount: 56160 },
-    { date: monthsBack(2), dr: 'Retail Sales', cr: 'Cash on Hand', amount: 163800, narration: 'Walk-in supply sales' },
+    { date: monthsBack(2), dr: 'Accounts Receivable', cr: 'Service Revenue', amount: 468000, narration: 'Audit prep and advisory', tax: 'VAT 12%', taxAmount: 56160 },
+    { date: monthsBack(2), dr: 'Cash on Hand', cr: 'Retail Sales', amount: 163800, narration: 'Walk-in supply sales' },
     { date: monthsBack(2), dr: 'Professional Fees', cr: 'BDO Checking Account', amount: 45000, narration: 'CPAs, quarterly engagement' },
     { date: monthsBack(2), dr: 'Supplies and Materials', cr: 'BDO Checking Account', amount: 94200, narration: 'Consumables restock' },
     { date: monthsBack(2), dr: 'Staff Salaries', cr: 'BDO Checking Account', amount: 199500, narration: 'Payroll for 6 staff, 13th month' },
     { date: monthsBack(2), dr: 'Utilities', cr: 'BDO Checking Account', amount: 28400, narration: 'Meralco and water' },
 
-    { date: monthsBack(1), dr: 'Service Revenue', cr: 'Accounts Receivable', amount: 502000, narration: 'Year-end audit assistance', tax: 'VAT 12%', taxAmount: 60240 },
-    { date: monthsBack(1), dr: 'Retail Sales', cr: 'Cash on Hand', amount: 171400, narration: 'Walk-in supply sales' },
+    { date: monthsBack(1), dr: 'Accounts Receivable', cr: 'Service Revenue', amount: 502000, narration: 'Year-end audit assistance', tax: 'VAT 12%', taxAmount: 60240 },
+    { date: monthsBack(1), dr: 'Cash on Hand', cr: 'Retail Sales', amount: 171400, narration: 'Walk-in supply sales' },
     { date: monthsBack(1), dr: 'Supplies and Materials', cr: 'BDO Checking Account', amount: 108600, narration: 'Consumables restock' },
     { date: monthsBack(1), dr: 'Office Rent', cr: 'BDO Checking Account', amount: 78000, narration: 'Unit 8B lease, monthly' },
     { date: monthsBack(1), dr: 'Staff Salaries', cr: 'BDO Checking Account', amount: 203000, narration: 'Payroll for 6 staff' },
