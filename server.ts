@@ -1751,7 +1751,19 @@ async function startServer() {
   });
 
   const PORT = Number(process.env.PORT || 3000);
-  const HOST = process.env.HOST || '127.0.0.1';
+
+  // Default to 0.0.0.0, not 127.0.0.1.
+  //
+  // Inside a container, binding loopback means nothing is listening on the
+  // container's network interface: docker-proxy and the cloudflared container
+  // both connect to the container IP, so every external request is refused
+  // while a loopback healthcheck inside the container still passes and reports
+  // the service as healthy. That failure is invisible from inside.
+  //
+  // This is safe because the container's own network namespace is the boundary.
+  // Exposure is controlled by what the host publishes — docker-compose binds
+  // 127.0.0.1:4030:3000, so port 3000 is not exposed to the internet.
+  const HOST = process.env.HOST || '0.0.0.0';
   const server = app.listen(PORT, HOST, () => {
     console.log(`[ledgerflow] listening on http://${HOST}:${PORT} (${IS_PROD ? 'production' : 'development'})`);
   });

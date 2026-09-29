@@ -52,9 +52,11 @@ USER node
 
 EXPOSE 3000
 
-# The named volume is mounted over /app/data, so the healthcheck must work
-# without assuming the build-time owner survives the mount.
+# The healthcheck deliberately goes over the container's own IP rather than
+# loopback: a loopback probe passes even when the server has bound only to
+# 127.0.0.1, which is the one configuration that looks healthy from inside and
+# is unreachable from outside.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
-  CMD curl -fsS http://127.0.0.1:3000/api/health || exit 1
+  CMD curl -fsS "http://$(hostname -i | awk '{print $1}'):${PORT}/api/health" || exit 1
 
 CMD ["node", "dist-server/server.js"]
