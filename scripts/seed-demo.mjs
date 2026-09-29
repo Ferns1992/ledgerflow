@@ -73,6 +73,10 @@ const LEDGERS = {
     { name: 'Power and Water', group_name: INDIRECT_EXP, opening_balance: 0 },
     { name: 'Freight and Logistics', group_name: DIRECT_EXP, opening_balance: 0 },
     { name: 'Trade Payables', group_name: LIABILITIES, opening_balance: 0 },
+    // Capital is a credit balance, so it is stored negative. Without it the
+    // opening assets have nothing on the other side and the trial balance
+    // cannot foot. 85,000 + 1,250,000 + 640,000.
+    { name: 'Share Capital', group_name: LIABILITIES, opening_balance: -1975000 },
   ],
   PH: [
     { name: 'Cash on Hand', group_name: ASSETS, opening_balance: 185000 },
@@ -85,6 +89,8 @@ const LEDGERS = {
     { name: 'Staff Salaries', group_name: INDIRECT_EXP, opening_balance: 0 },
     { name: 'Utilities', group_name: INDIRECT_EXP, opening_balance: 0 },
     { name: 'Professional Fees', group_name: INDIRECT_EXP, opening_balance: 0 },
+    // 185,000 + 940,000 + 312,000, credited.
+    { name: 'Share Capital', group_name: LIABILITIES, opening_balance: -1437000 },
   ],
 };
 
@@ -256,6 +262,7 @@ function seedIndia() {
     { date: monthsBack(5), dr: 'Employee Salaries', cr: 'HDFC Current Account', amount: 214000, narration: 'Shop floor payroll' },
     { date: monthsBack(5), dr: 'Power and Water', cr: 'HDFC Current Account', amount: 42800, narration: 'MSEDCL electricity' },
 
+    { date: monthsBack(4), dr: 'HDFC Current Account', cr: 'Trade Receivables', amount: 380000, narration: 'Part realisation of trade receivables' },
     { date: monthsBack(4), dr: 'Trade Receivables', cr: 'Textile Sales', amount: 742000, narration: 'Export order, Dubai' },
     { date: monthsBack(4), dr: 'Trade Receivables', cr: 'Job Work Income', amount: 186000, narration: 'Job work for Malpani Textiles' },
     { date: monthsBack(4), dr: 'Fabric Purchases', cr: 'HDFC Current Account', amount: 344000, narration: 'Processed fabric, Ichalkaranji' },
@@ -263,20 +270,23 @@ function seedIndia() {
     { date: monthsBack(4), dr: 'Employee Salaries', cr: 'HDFC Current Account', amount: 221000, narration: 'Shop floor payroll' },
     { date: monthsBack(4), dr: 'Power and Water', cr: 'HDFC Current Account', amount: 46100, narration: 'MSEDCL electricity' },
 
-    { date: monthsBack(3), dr: 'Trade Receivables', cr: 'Textile Sales', amount: 826000, narration: 'Domestic wholesale, multiple lots', tax: 'CGST 9%', taxAmount: 37170 },
+    { date: monthsBack(3), dr: 'HDFC Current Account', cr: 'Trade Receivables', amount: 455000, narration: 'Part realisation of trade receivables' },
+    { date: monthsBack(3), dr: 'Trade Receivables', cr: 'Textile Sales', amount: 826000, narration: 'Domestic wholesale, multiple lots', tax: 'IGST 18%', taxAmount: 148680 },
     { date: monthsBack(3), dr: 'Trade Receivables', cr: 'Job Work Income', amount: 242000, narration: 'Job work, Kutch cluster' },
     { date: monthsBack(3), dr: 'Fabric Purchases', cr: 'HDFC Current Account', amount: 389000, narration: 'Yarn purchase, Ahmedabad' },
     { date: monthsBack(3), dr: 'Factory Rent', cr: 'HDFC Current Account', amount: 85000, narration: 'Factory shed rent' },
     { date: monthsBack(3), dr: 'Employee Salaries', cr: 'HDFC Current Account', amount: 228000, narration: 'Shop floor payroll' },
     { date: monthsBack(3), dr: 'Power and Water', cr: 'HDFC Current Account', amount: 48900, narration: 'MSEDCL electricity' },
 
-    { date: monthsBack(2), dr: 'Trade Receivables', cr: 'Textile Sales', amount: 903000, narration: 'Bulk order, Chennai', tax: 'IGST 18%', taxAmount: 68818.5 },
+    { date: monthsBack(2), dr: 'HDFC Current Account', cr: 'Trade Receivables', amount: 520000, narration: 'Part realisation of trade receivables' },
+    { date: monthsBack(2), dr: 'Trade Receivables', cr: 'Textile Sales', amount: 903000, narration: 'Bulk order, Chennai', tax: 'IGST 18%', taxAmount: 162540 },
     { date: monthsBack(2), dr: 'Trade Receivables', cr: 'Job Work Income', amount: 198000, narration: 'Job work, Ludhiana' },
     { date: monthsBack(2), dr: 'Fabric Purchases', cr: 'HDFC Current Account', amount: 412000, narration: 'Grey fabric purchase' },
     { date: monthsBack(2), dr: 'Freight and Logistics', cr: 'HDFC Current Account', amount: 24900, narration: 'Outbound logistics' },
     { date: monthsBack(2), dr: 'Employee Salaries', cr: 'HDFC Current Account', amount: 235000, narration: 'Shop floor payroll' },
 
-    { date: monthsBack(1), dr: 'Trade Receivables', cr: 'Textile Sales', amount: 968000, narration: 'Domestic wholesale, quarterly lot', tax: 'IGST 18%', taxAmount: 73852.8 },
+    { date: monthsBack(1), dr: 'Trade Receivables', cr: 'Textile Sales', amount: 968000, narration: 'Domestic wholesale, quarterly lot', tax: 'IGST 18%', taxAmount: 174240 },
+    { date: monthsBack(1), dr: 'HDFC Current Account', cr: 'Trade Receivables', amount: 575000, narration: 'Part realisation of trade receivables' },
     { date: monthsBack(1), dr: 'Trade Receivables', cr: 'Job Work Income', amount: 214000, narration: 'Job work, Tiruppur' },
     { date: monthsBack(1), dr: 'Fabric Purchases', cr: 'HDFC Current Account', amount: 438000, narration: 'Finished fabric, Coimbatore' },
     { date: monthsBack(1), dr: 'Factory Rent', cr: 'HDFC Current Account', amount: 85000, narration: 'Factory shed rent' },
@@ -286,7 +296,7 @@ function seedIndia() {
     // Receivable collection clears the asset side
     { date: daysAgo(12), dr: 'HDFC Current Account', cr: 'Trade Receivables', amount: 520000, narration: 'Realised receivables, bank transfer' },
     // Supplier credit
-    { date: daysAgo(6), dr: 'Trade Payables', cr: 'Trade Receivables', amount: 120000, narration: 'Set off against supplier credit note' },
+    { date: daysAgo(6), dr: 'HDFC Current Account', cr: 'Trade Receivables', amount: 310000, narration: 'Final realisation of trade receivables' },
   ]);
 
   addAssets(cid, [
@@ -297,14 +307,14 @@ function seedIndia() {
   ]);
 
   const pos = addPOs(cid, [
-    { type: 'IPO', number: 'IPO-2026-0001', date: daysAgo(48), supplier: 'Surat Cotton Mills', total: 528000, status: 'Received', items: [['Ring spun yarn 30s', 2400, 145], ['Open end yarn 20s', 1200, 170]] },
+    { type: 'IPO', number: 'IPO-2026-0001', date: daysAgo(48), supplier: 'Surat Cotton Mills', total: 552000, status: 'Received', items: [['Ring spun yarn 30s', 2400, 145], ['Open end yarn 20s', 1200, 170]] },
     { type: 'LPO', number: 'LPO-2026-0002', date: daysAgo(30), supplier: 'Ichalkaranji Fabrics Pvt Ltd', total: 312000, status: 'Ordered', items: [['Processed cotton fabric', 800, 390]] },
-    { type: 'IPO', number: 'IPO-2026-0003', date: daysAgo(16), supplier: 'Ludhiana Woollen Traders', total: 246000, status: 'Pending', items: [['Wool blend fabric', 400, 460], ['Lining material', 600, 90]] },
+    { type: 'IPO', number: 'IPO-2026-0003', date: daysAgo(16), supplier: 'Ludhiana Woollen Traders', total: 238000, status: 'Pending', items: [['Wool blend fabric', 400, 460], ['Lining material', 600, 90]] },
     { type: 'LPO', number: 'LPO-2026-0004', date: daysAgo(5), supplier: 'Pune Chemical Supplies', total: 96500, status: 'Approved', items: [['Dyeing chemicals', 1, 42000], ['Sizing agents', 1, 54500]] },
   ]);
 
   addGRNs(cid, [
-    { number: 'GRN-2026-0001', date: daysAgo(44), supplier: 'Surat Cotton Mills', total: 528000, status: 'Received', items: [['Ring spun yarn 30s', 2400, 145], ['Open end yarn 20s', 1200, 170]] },
+    { number: 'GRN-2026-0001', date: daysAgo(44), supplier: 'Surat Cotton Mills', total: 552000, status: 'Received', items: [['Ring spun yarn 30s', 2400, 145], ['Open end yarn 20s', 1200, 170]] },
   ], pos[0]?.id);
 
   log(`${IN.name}: 11 ledgers, 4 taxes, 24 vouchers, 4 assets, 4 POs, 1 GRN`);
@@ -340,6 +350,7 @@ function seedPhilippines() {
     { date: monthsBack(5), dr: 'Staff Salaries', cr: 'BDO Checking Account', amount: 186000, narration: 'Payroll for 6 staff' },
     { date: monthsBack(5), dr: 'Utilities', cr: 'BDO Checking Account', amount: 24300, narration: 'Meralco and water' },
 
+    { date: monthsBack(4), dr: 'BDO Checking Account', cr: 'Accounts Receivable', amount: 242000, narration: 'Collections from retainer clients' },
     { date: monthsBack(4), dr: 'Accounts Receivable', cr: 'Service Revenue', amount: 388000, narration: 'Payroll processing engagement', tax: 'VAT 12%', taxAmount: 46560 },
     { date: monthsBack(4), dr: 'Cash on Hand', cr: 'Retail Sales', amount: 142600, narration: 'Walk-in supply sales' },
     { date: monthsBack(4), dr: 'Professional Fees', cr: 'BDO Checking Account', amount: 45000, narration: 'CPAs, quarterly engagement' },
@@ -347,6 +358,7 @@ function seedPhilippines() {
     { date: monthsBack(4), dr: 'Staff Salaries', cr: 'BDO Checking Account', amount: 192000, narration: 'Payroll for 6 staff' },
     { date: monthsBack(4), dr: 'Utilities', cr: 'BDO Checking Account', amount: 25900, narration: 'Meralco and water' },
 
+    { date: monthsBack(3), dr: 'BDO Checking Account', cr: 'Accounts Receivable', amount: 268000, narration: 'Collections from retainer clients' },
     { date: monthsBack(3), dr: 'Accounts Receivable', cr: 'Service Revenue', amount: 412000, narration: 'BIR compliance filings, 18 clients', tax: 'VAT 12%', taxAmount: 49440 },
     { date: monthsBack(3), dr: 'Cash on Hand', cr: 'Retail Sales', amount: 151200, narration: 'Walk-in supply sales' },
     { date: monthsBack(3), dr: 'Supplies and Materials', cr: 'BDO Checking Account', amount: 101400, narration: 'Consumables restock' },
@@ -354,6 +366,7 @@ function seedPhilippines() {
     { date: monthsBack(3), dr: 'Staff Salaries', cr: 'BDO Checking Account', amount: 196000, narration: 'Payroll for 6 staff' },
     { date: monthsBack(3), dr: 'Utilities', cr: 'BDO Checking Account', amount: 27100, narration: 'Meralco and water' },
 
+    { date: monthsBack(2), dr: 'BDO Checking Account', cr: 'Accounts Receivable', amount: 305000, narration: 'Collections from retainer clients' },
     { date: monthsBack(2), dr: 'Accounts Receivable', cr: 'Service Revenue', amount: 468000, narration: 'Audit prep and advisory', tax: 'VAT 12%', taxAmount: 56160 },
     { date: monthsBack(2), dr: 'Cash on Hand', cr: 'Retail Sales', amount: 163800, narration: 'Walk-in supply sales' },
     { date: monthsBack(2), dr: 'Professional Fees', cr: 'BDO Checking Account', amount: 45000, narration: 'CPAs, quarterly engagement' },
@@ -361,6 +374,7 @@ function seedPhilippines() {
     { date: monthsBack(2), dr: 'Staff Salaries', cr: 'BDO Checking Account', amount: 199500, narration: 'Payroll for 6 staff, 13th month' },
     { date: monthsBack(2), dr: 'Utilities', cr: 'BDO Checking Account', amount: 28400, narration: 'Meralco and water' },
 
+    { date: monthsBack(1), dr: 'BDO Checking Account', cr: 'Accounts Receivable', amount: 340000, narration: 'Collections from retainer clients' },
     { date: monthsBack(1), dr: 'Accounts Receivable', cr: 'Service Revenue', amount: 502000, narration: 'Year-end audit assistance', tax: 'VAT 12%', taxAmount: 60240 },
     { date: monthsBack(1), dr: 'Cash on Hand', cr: 'Retail Sales', amount: 171400, narration: 'Walk-in supply sales' },
     { date: monthsBack(1), dr: 'Supplies and Materials', cr: 'BDO Checking Account', amount: 108600, narration: 'Consumables restock' },
@@ -368,7 +382,7 @@ function seedPhilippines() {
     { date: monthsBack(1), dr: 'Staff Salaries', cr: 'BDO Checking Account', amount: 203000, narration: 'Payroll for 6 staff' },
     { date: monthsBack(1), dr: 'Utilities', cr: 'BDO Checking Account', amount: 29600, narration: 'Meralco and water' },
 
-    { date: daysAgo(14), dr: 'BDO Checking Account', cr: 'Accounts Receivable', amount: 348000, narration: 'BIR e-invoicing receipts remitted' },
+    { date: daysAgo(14), dr: 'BDO Checking Account', cr: 'Accounts Receivable', amount: 348000, narration: 'Final collections, advisory clients' },
   ]);
 
   addAssets(cid, [
@@ -380,13 +394,13 @@ function seedPhilippines() {
   ]);
 
   const pos = addPOs(cid, [
-    { type: 'LPO', number: 'LPO-2026-0001', date: daysAgo(40), supplier: 'Metro Manila Stationery Supply', total: 86400, status: 'Received', items: [['Bond paper, 80gsm', 240, 180], ['Ballpoint pens, boxed', 120, 120], ['Archival folders', 200, 96]] },
+    { type: 'LPO', number: 'LPO-2026-0001', date: daysAgo(40), supplier: 'Metro Manila Stationery Supply', total: 76800, status: 'Received', items: [['Bond paper, 80gsm', 240, 180], ['Ballpoint pens, boxed', 120, 120], ['Archival folders', 200, 96]] },
     { type: 'IPO', number: 'IPO-2026-0002', date: daysAgo(24), supplier: 'Laguna Tech Trading', total: 148500, status: 'Ordered', items: [['Desktop workstations', 6, 24750]] },
     { type: 'LPO', number: 'LPO-2026-0003', date: daysAgo(11), supplier: 'Cebu Print Solutions', total: 63200, status: 'Pending', items: [['Tarpaulin and signage', 4, 9800], ['Digital printing', 1, 24000]] },
   ]);
 
   addGRNs(cid, [
-    { number: 'GRN-2026-0001', date: daysAgo(36), supplier: 'Metro Manila Stationery Supply', total: 86400, status: 'Received', items: [['Bond paper, 80gsm', 240, 180], ['Ballpoint pens, boxed', 120, 120], ['Archival folders', 200, 96]] },
+    { number: 'GRN-2026-0001', date: daysAgo(36), supplier: 'Metro Manila Stationery Supply', total: 76800, status: 'Received', items: [['Bond paper, 80gsm', 240, 180], ['Ballpoint pens, boxed', 120, 120], ['Archival folders', 200, 96]] },
   ], pos[0]?.id);
 
   log(`${PH.name}: 10 ledgers, 4 taxes, 26 vouchers, 5 assets, 3 POs, 1 GRN`);

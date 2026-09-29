@@ -202,6 +202,39 @@ can never leave you with zero backups.
 docker exec ledgerflow node scripts/backup.mjs
 ```
 
+### Demo data and the audit
+
+`scripts/seed-demo.mjs` creates two fully populated companies — an Indian
+textile manufacturer (INR, GST, Maharashtra) and a Philippine bookkeeping firm
+(PHP, VAT, Metro Manila) — with six months of vouchers, assets, purchase orders
+and goods receipts each.
+
+```bash
+docker exec ledgerflow node scripts/seed-demo.mjs            # adds if absent
+docker exec ledgerflow node scripts/seed-demo.mjs --reset    # replaces them
+```
+
+Idempotent, and transactional per company, so a failure cannot leave a
+half-built ledger behind.
+
+`scripts/audit-demo.mjs` checks the result as an accountant would, rather than
+just confirming the rows exist. It verifies the trial balance foots, that no
+voucher debits and credits the same ledger, that no voucher leg crosses
+companies, that every tax amount equals rate × base, that purchase orders and
+goods receipts foot to their line items, that no document number is duplicated,
+that cash accounts do not end negative, that depreciation rates are sane, and
+that each company's tax identifier is well formed for its own jurisdiction.
+It exits non-zero if anything fails, so it can be wired into a cron or CI.
+
+```bash
+docker exec -w /app ledgerflow node scripts/audit-demo.mjs
+```
+
+Both caught real errors during development, which is the point: reversed
+voucher legs, a GSTIN validated as a Philippine TIN, document totals that did
+not match their line items, and a bank account drained below zero because
+sales were credited to receivables and never collected.
+
 ### Off-site mirror
 
 `deploy/ledgerflow-r2-sync.sh` runs on the **host**, never in the container, so
@@ -269,15 +302,18 @@ restored file.
 amount increases the debit ledger and decreases the credit one. Both legs must
 be in the same company.
 
-**P&L.** Income and expense totals are derived from ledger groups:
+**P&L.** Income and expense are derived from ledger groups using double-entry
+signs:
 
-- a voucher touching an **Income** group ledger adds to income
-- a voucher touching an **Expense** group ledger adds to expenses
+- a **credit** to an income ledger is revenue, a **debit** is a refund or reversal
+- a **debit** to an expense ledger is a cost, a **credit** reverses it
 - `profit = income − expenses`
 
-When both legs are classified (for example an expense paid out of cash), each
-side is counted and the total is halved, so the split always reconciles with the
-voucher totals.
+Balance-sheet ledgers (group `Assets` or `Liabilities`) contribute nothing.
+A voucher like "Bank Dr / Receivables Cr" is a collection, not revenue, and
+must leave profit untouched — which is why those groups exist separately from
+income and expense. Getting this wrong by halving the total, on the assumption
+that both legs are P&L accounts, understates profit by roughly half.
 
 **Balances.** `opening_balance + Σ debits − Σ credits`, with tax added to the
 debit side. Computed in the browser from the loaded company bundle, so it stays
