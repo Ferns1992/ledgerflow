@@ -1,16 +1,36 @@
-version: '3.8'
-
 services:
   ledgerflow:
     build: .
+    image: ledgerflow:latest
+    # Bound to loopback only. The app is published through the existing
+    # cloudflared tunnel, so it must never be reachable from the public
+    # internet on its own port.
     ports:
-      - "4030:3000"
+      - "127.0.0.1:4030:3000"
     volumes:
+      # The database itself, so it survives image rebuilds.
       - ledgerflow_data:/app/data
+      # Snapshots are written to a host directory rather than into the volume,
+      # so they can be mirrored off-site without a second mount and survive a
+      # volume being recreated.
+      - ./backups:/app/backups
+    env_file:
+      - .env
     environment:
-      - NODE_ENV=production
-      - DB_PATH=/app/data/accounting.db
-    restart: always
+      NODE_ENV: production
+      DB_PATH: /app/data/accounting.db
+      STATIC_DIR: /app/dist
+      BACKUP_DIR: /app/backups
+      PORT: "3000"
+    restart: unless-stopped
+    # Single writer against one SQLite file; scaling this out would need
+    # WAL coordination or a different database. The cap keeps a runaway export
+    # or import from pushing this 1 GB box into swap alongside the other
+    # services on it.
+    deploy:
+      resources:
+        limits:
+          memory: 350M
 
 volumes:
   ledgerflow_data:

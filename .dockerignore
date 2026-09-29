@@ -1,0 +1,22 @@
+# Never bake secrets, the database, or local build output into the image.
+node_modules
+dist
+dist-server
+data
+backups
+*.db
+*.db-wal
+*.db-shm
+.git
+.gitignore
+.env
+.env.*
+!.env.example
+*.log
+.DS_Store
+.vscode
+.idea
+README.md
+docker-compose.yml
+Dockerfile
+.env.example

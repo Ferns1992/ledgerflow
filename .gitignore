@@ -1,8 +1,14 @@
 node_modules/
-build/
 dist/
+dist-server/
+data/
 coverage/
 .DS_Store
 *.log
-.env*
-!.env.example
+.freebuff/
+# Snapshots are operational data, not source. Never commit a database.
+backups/
+*.db
+*.db-wal
+*.db-shm
+.env

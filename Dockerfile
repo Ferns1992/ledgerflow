@@ -1,31 +1,60 @@
-# Build stage
-FROM node:20-slim AS builder
+# syntax=docker/dockerfile:1
+
+# --- Build stage -------------------------------------------------------------
+FROM node:22-bookworm-slim AS builder
 
 WORKDIR /app
 
-COPY package*.json ./
-RUN npm install
+# better-sqlite3 compiles a native addon when no prebuilt binary matches the
+# platform, so the build stage needs a toolchain. It is not carried into the
+# runtime image.
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends python3 make g++ ca-certificates \
+  && rm -rf /var/lib/apt/lists/*
 
-COPY . .
+# Install with dev dependencies so vite and tsc are available to build.
+COPY package.json package-lock.json* ./
+RUN npm ci --no-audit --no-fund
+
+COPY tsconfig.json tsconfig.server.json vite.config.ts index.html ./
+COPY src ./src
+COPY server.ts ./
+COPY scripts ./scripts
+
 RUN npm run build
 
-# Production stage
-FROM node:20-slim
+# --- Runtime stage -----------------------------------------------------------
+FROM node:22-bookworm-slim AS runtime
 
 WORKDIR /app
 
-# Install sqlite3 dependencies if needed
-RUN apt-get update && apt-get install -y python3 make g++ && rm -rf /var/lib/apt/lists/*
+# curl is only here for the container healthcheck.
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends curl \
+  && rm -rf /var/lib/apt/lists/*
 
-COPY package*.json ./
-RUN npm install --omit=dev
+ENV NODE_ENV=production \
+    PORT=3000 \
+    DB_PATH=/app/data/accounting.db
+
+# Production dependencies only. better-sqlite3 ships a prebuilt binary for
+# node 22 on linux/x64 and arm64, so no compiler is needed here.
+COPY package.json package-lock.json* ./
+RUN npm ci --omit=dev --no-audit --no-fund \
+  && npm cache clean --force
 
 COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/server.ts ./
-COPY --from=builder /app/tsconfig.json ./
+COPY --from=builder /app/dist-server ./dist-server
 
-# Expose the internal port
+# Run as an unprivileged user. node:22 images ship one already.
+RUN mkdir -p /app/data /app/backups && chown -R node:node /app/data /app/backups
+USER node
+
 EXPOSE 3000
 
-# Start the application
-CMD ["npx", "tsx", "server.ts"]
+# The named volume is mounted over /app/data, so the healthcheck must work
+# without assuming the build-time owner survives the mount.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+  CMD curl -fsS http://127.0.0.1:3000/api/health || exit 1
+
+CMD ["node", "dist-server/server.js"]

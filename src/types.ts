@@ -5,11 +5,29 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+export type Role = 'admin' | 'manager' | 'viewer';
+
 export interface User {
   id: number;
   username: string;
-  role: 'admin' | 'manager' | 'viewer';
+  role: Role;
   full_name: string;
+  active?: number;
+  must_change_password?: number;
+  company_count?: number;
+}
+
+/**
+ * UI-side permission helpers. The server enforces every one of these
+ * independently — these only decide which controls to render, so a read-only
+ * account is never shown a button that is guaranteed to be rejected.
+ */
+export function canWrite(user: User | null | undefined): boolean {
+  return user?.role === 'admin' || user?.role === 'manager';
+}
+
+export function isAdmin(user: User | null | undefined): boolean {
+  return user?.role === 'admin';
 }
 
 export interface Company {
@@ -43,7 +61,7 @@ export interface Transaction {
   debit_ledger_id: number;
   credit_ledger_id: number;
   amount: number;
-  tax_id?: number;
+  tax_id?: number | null;
   tax_amount: number;
   narration: string;
   debit_ledger_name?: string;
@@ -75,7 +93,8 @@ export interface PurchaseOrder {
   supplier: string;
   total_amount: number;
   status: string;
-  items: string; // JSON string
+  /** Serialised JSON array; the API always returns a string. */
+  items: string;
 }
 
 export interface GRNItem {
@@ -90,9 +109,37 @@ export interface GRN {
   company_id: number;
   grn_number: string;
   date: string;
-  po_id: number;
+  po_id: number | null;
   supplier: string;
   total_amount: number;
   status: string;
-  items: string; // JSON string
+  /** Serialised JSON array; the API always returns a string. */
+  items: string;
+}
+
+export interface EventLog {
+  id: number;
+  user_name: string;
+  action: string;
+  entity_type: string;
+  entity_id: number | null;
+  details: string;
+  timestamp: string;
+}
+
+/** Ledger groups the P&L engine understands. */
+export const INCOME_GROUPS = ['Direct Incomes', 'Indirect Incomes'] as const;
+export const EXPENSE_GROUPS = ['Direct Expenses', 'Indirect Expenses'] as const;
+export const LEDGER_GROUPS = [...INCOME_GROUPS, ...EXPENSE_GROUPS] as const;
+export type LedgerGroup = (typeof LEDGER_GROUPS)[number];
+
+/** Parses a stored `items` column without letting bad data crash a view. */
+export function parseItems<T>(raw: string | null | undefined): T[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? (parsed as T[]) : [];
+  } catch {
+    return [];
+  }
 }
