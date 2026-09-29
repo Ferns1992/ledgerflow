@@ -130,7 +130,17 @@ export interface EventLog {
 /** Ledger groups the P&L engine understands. */
 export const INCOME_GROUPS = ['Direct Incomes', 'Indirect Incomes'] as const;
 export const EXPENSE_GROUPS = ['Direct Expenses', 'Indirect Expenses'] as const;
-export const LEDGER_GROUPS = [...INCOME_GROUPS, ...EXPENSE_GROUPS] as const;
+
+/**
+ * Balance-sheet accounts. These are deliberately *not* income or expense:
+ * cash, bank and receivables are assets and payables are liabilities, so
+ * counting them in the P&L would misstate profit. A voucher that moves money
+ * into cash ("Bank Dr / Receivables Cr") is a collection, not revenue, and
+ * must leave the profit and loss statement untouched.
+ */
+export const BALANCE_GROUPS = ['Assets', 'Liabilities'] as const;
+
+export const LEDGER_GROUPS = [...INCOME_GROUPS, ...EXPENSE_GROUPS, ...BALANCE_GROUPS] as const;
 export type LedgerGroup = (typeof LEDGER_GROUPS)[number];
 
 /** Parses a stored `items` column without letting bad data crash a view. */

@@ -20,16 +20,25 @@ export function DashboardView() {
       const debitGroup = groupOf.get(t.debit_ledger_id) ?? '';
       const creditGroup = groupOf.get(t.credit_ledger_id) ?? '';
       const total = t.amount + (t.tax_amount || 0);
-      // Money into an income ledger is a credit; money out of an expense
-      // ledger is a debit. Both sides are counted so the split always nets to
-      // the same profit the voucher total implies.
-      if ((INCOME_GROUPS as readonly string[]).includes(debitGroup)) income += total;
-      if ((EXPENSE_GROUPS as readonly string[]).includes(debitGroup)) expense += total;
+
+      // Double entry gives the sign, so no halving is needed.
+      //
+      // A credit to an income ledger is revenue; a debit to one is a refund or
+      // reversal, so it subtracts. A debit to an expense is a cost; a credit to
+      // one reverses it.
+      //
+      // This matters because a voucher usually has only one P&L leg. "Sales Dr
+      // / Receivables Cr" is revenue with no expense anywhere, and an earlier
+      // version that counted both legs and halved the total would have booked
+      // half the revenue as an expense. Balance-sheet ledgers (assets,
+      // liabilities) contribute nothing here, which is correct.
       if ((INCOME_GROUPS as readonly string[]).includes(creditGroup)) income += total;
-      if ((EXPENSE_GROUPS as readonly string[]).includes(creditGroup)) expense += total;
+      if ((INCOME_GROUPS as readonly string[]).includes(debitGroup)) income -= total;
+      if ((EXPENSE_GROUPS as readonly string[]).includes(debitGroup)) expense += total;
+      if ((EXPENSE_GROUPS as readonly string[]).includes(creditGroup)) expense -= total;
     }
-    income = round2(income / 2);
-    expense = round2(expense / 2);
+    income = round2(income);
+    expense = round2(expense);
     return { income, expense, profit: round2(income - expense) };
   }, [transactions, groupOf]);
 
@@ -75,12 +84,12 @@ export function DashboardView() {
       const total = t.amount + (t.tax_amount || 0);
       const debitGroup = groupOf.get(t.debit_ledger_id) ?? '';
       const creditGroup = groupOf.get(t.credit_ledger_id) ?? '';
-      if ((INCOME_GROUPS as readonly string[]).includes(creditGroup) || (INCOME_GROUPS as readonly string[]).includes(debitGroup)) {
-        buckets[index].income += total / 2;
-      }
-      if ((EXPENSE_GROUPS as readonly string[]).includes(creditGroup) || (EXPENSE_GROUPS as readonly string[]).includes(debitGroup)) {
-        buckets[index].expense += total / 2;
-      }
+      // Same sign convention as the headline P&L: credit an income ledger adds
+      // revenue, debit an expense ledger adds cost.
+      if ((INCOME_GROUPS as readonly string[]).includes(creditGroup)) buckets[index].income += total;
+      if ((INCOME_GROUPS as readonly string[]).includes(debitGroup)) buckets[index].income -= total;
+      if ((EXPENSE_GROUPS as readonly string[]).includes(debitGroup)) buckets[index].expense += total;
+      if ((EXPENSE_GROUPS as readonly string[]).includes(creditGroup)) buckets[index].expense -= total;
     }
     return buckets.map((b) => ({ ...b, income: round2(b.income), expense: round2(b.expense) }));
   }, [transactions, groupOf]);

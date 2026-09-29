@@ -4,7 +4,7 @@ import { useApp } from '../store';
 import { api, errMsg, field } from '../lib/api';
 import { Badge, Button, Card, DataTable, EmptyState, Input, Modal, PageHeader, Select, Td, Th } from '../components/ui';
 import { exportToExcel, exportToPDF } from '../lib/exporters';
-import { LEDGER_GROUPS, type Ledger } from '../types';
+import { BALANCE_GROUPS, EXPENSE_GROUPS, INCOME_GROUPS, LEDGER_GROUPS, type Ledger } from '../types';
 import { formatMoney } from '../lib/format';
 
 const BLANK = { name: '', group_name: 'Direct Expenses' as string, opening_balance: 0 };
@@ -242,9 +242,7 @@ export function LedgersView() {
             <tr key={ledger.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors">
               <Td className="font-medium text-zinc-900 dark:text-white">{ledger.name}</Td>
               <Td>
-                <Badge tone={ledger.group_name.includes('Income') ? 'green' : 'amber'}>
-                  {ledger.group_name || 'Ungrouped'}
-                </Badge>
+                <Badge tone={groupTone(ledger.group_name)}>{ledger.group_name || 'Ungrouped'}</Badge>
               </Td>
               <Td className="text-right font-mono">{formatMoney(ledger.opening_balance, currency)}</Td>
               <Td>
@@ -372,7 +370,14 @@ function LedgerForm({
   );
 }
 
-/** Minimal CSV parse: Name, Group, Opening Balance. */
+function groupTone(group: string): 'neutral' | 'green' | 'amber' | 'blue' {
+  if ((INCOME_GROUPS as readonly string[]).includes(group)) return 'green';
+  if ((EXPENSE_GROUPS as readonly string[]).includes(group)) return 'amber';
+  if ((BALANCE_GROUPS as readonly string[]).includes(group)) return 'blue';
+  return 'neutral';
+}
+
+/** Minimum CSV parse: Name, Group, Opening Balance. */
 function parseLedgerCsv(text: string, companyId: number) {
   const lines = text.split(/\r?\n/).filter((l) => l.trim());
   if (lines.length < 2) return [];
