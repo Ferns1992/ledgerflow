@@ -45,6 +45,9 @@ RUN npm ci --omit=dev --no-audit --no-fund \
 
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/dist-server ./dist-server
+# backup.mjs runs inside this container, so it has to exist in the runtime
+# image, not just in the builder where the rest of the source is compiled.
+COPY --from=builder /app/scripts ./scripts
 
 # Run as an unprivileged user. node:22 images ship one already.
 RUN mkdir -p /app/data /app/backups && chown -R node:node /app/data /app/backups
