@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { KeyRound } from 'lucide-react';
 import { useApp } from '../store';
+import { passwordHint, passwordProblems } from '../lib/passwords';
 import { Button, Card, Input } from './ui';
 
 /** Blocking screen shown until a flagged account sets a new password. */
@@ -20,8 +21,9 @@ export function MustChangePassword() {
       setError('Password must be at least 10 characters.');
       return;
     }
-    if (!/[a-z]/.test(next) || !/[A-Z]/.test(next) || !/[0-9]/.test(next)) {
-      setError('Password must include an uppercase letter, a lowercase letter and a digit.');
+    const issues = passwordProblems(next);
+    if (issues.length) {
+      setError(`Password must include ${issues.join(', ')}.`);
       return;
     }
     if (next !== confirm) {
@@ -69,7 +71,7 @@ export function MustChangePassword() {
               autoComplete="new-password"
               value={next}
               onChange={(e) => setNext(e.target.value)}
-              hint="At least 10 characters, with an uppercase letter, a lowercase letter and a digit."
+              hint={passwordHint()}
             />
             <Input
               label="Confirm new password"

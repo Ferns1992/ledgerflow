@@ -1,9 +1,10 @@
 import { useState } from 'react';
-import { KeyRound, Plus, ShieldCheck, Trash2, UserCheck, UserX } from 'lucide-react';
+import { KeyRound, Pencil, Plus, ShieldCheck, Trash2, UserCheck, UserX } from 'lucide-react';
 import { useApp } from '../store';
 import { api, errMsg } from '../lib/api';
 import { Badge, Button, Card, DataTable, EmptyState, Input, Modal, PageHeader, Select, Td, Th } from '../components/ui';
 import type { Role, User } from '../types';
+import { passwordHint, passwordProblems } from '../lib/passwords';
 
 const BLANK = { username: '', full_name: '', role: 'viewer' as Role, password: '', company_ids: [] as number[] };
 
@@ -52,6 +53,40 @@ export function UsersView() {
       notify('Could not load company assignments', 'error');
     } finally {
       setLoadingCompanies(false);
+    }
+  };
+
+  /**
+   * Admin-forced reset. Clears the must-change flag only if a new password is
+   * actually supplied, so an accidental blank field does not silently strip a
+   * user's forced-reset requirement.
+   */
+  const resetPassword = async (target: User) => {
+    const next = window.prompt(
+      `New password for ${target.username}\n\n` +
+        'At least 10 characters, with an uppercase letter, a lowercase letter and a digit.\n' +
+        'They will be signed out of every device.',
+    );
+    if (next === null) return;
+    if (passwordProblems(next).length) {
+      notify(`Password must contain ${passwordProblems(next).join(', ')}`, 'error');
+      return;
+    }
+    try {
+      await api(`/api/users/${target.id}`, {
+        method: 'PUT',
+        body: {
+          username: target.username,
+          full_name: target.full_name,
+          role: target.role,
+          active: target.active ?? 1,
+          password: next,
+        },
+      });
+      notify(`Password reset for ${target.username}. They have been signed out everywhere.`);
+      await refreshUsers();
+    } catch (error) {
+      notify(errMsg(error, 'Could not reset password'), 'error');
     }
   };
 
@@ -198,6 +233,14 @@ export function UsersView() {
               <Td>
                 <div className="flex items-center justify-end gap-1">
                   <Button variant="ghost" className="px-2 py-1" title="Edit" onClick={() => void openEdit(target)}>
+                    <Pencil size={15} />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    className="px-2 py-1"
+                    title="Reset password"
+                    onClick={() => void resetPassword(target)}
+                  >
                     <KeyRound size={15} />
                   </Button>
                   {target.id !== user?.id && (
@@ -265,7 +308,11 @@ export function UsersView() {
               required={!editing}
               value={form.password}
               onChange={(e) => setForm({ ...form, password: e.target.value })}
-              hint="At least 10 characters with upper case, lower case and a number."
+              hint={
+                editing
+                  ? 'Setting a password signs the user out everywhere and clears their must-reset flag.'
+                  : `${passwordHint()} The user will be asked to change it.`
+              }
             />
           </div>
 

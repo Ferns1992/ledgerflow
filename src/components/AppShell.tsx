@@ -4,6 +4,7 @@ import {
   ArrowRightLeft,
   Building2,
   FileStack,
+  KeyRound,
   Landmark,
   LogOut,
   Menu,
@@ -17,6 +18,7 @@ import {
 } from 'lucide-react';
 import { useApp } from '../store';
 import { Avatar, Badge, Select } from '../components/ui';
+import { ChangePasswordModal } from './ChangePassword';
 
 interface NavItem {
   to: string;
@@ -46,12 +48,14 @@ const ADMIN_NAV: NavItem[] = [
 export function AppShell() {
   const { user, companies, currentCompany, setCurrentCompanyId, isAdmin, logout, loading } = useApp();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [passwordOpen, setPasswordOpen] = useState(false);
   const location = useLocation();
 
   const links = isAdmin ? [...NAV, ...ADMIN_NAV] : NAV;
 
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
+      <ChangePasswordModal isOpen={passwordOpen} onClose={() => setPasswordOpen(false)} />
       <aside
         className={`fixed inset-y-0 left-0 z-40 w-64 bg-white dark:bg-zinc-900 border-r border-zinc-200 dark:border-zinc-800 flex flex-col transform transition-transform lg:translate-x-0 ${
           menuOpen ? 'translate-x-0' : '-translate-x-full'
@@ -104,6 +108,14 @@ export function AppShell() {
               </p>
               <Badge tone={isAdmin ? 'blue' : 'neutral'}>{user?.role}</Badge>
             </div>
+            <button
+              type="button"
+              onClick={() => setPasswordOpen(true)}
+              title="Change password"
+              className="p-2 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 transition-colors"
+            >
+              <KeyRound size={15} />
+            </button>
             <button
               type="button"
               onClick={() => void logout()}
