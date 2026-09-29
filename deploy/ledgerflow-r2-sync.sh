@@ -28,8 +28,7 @@ echo "ledgerflow-r2-sync: mirroring ${COUNT} snapshot(s) to R2:${BUCKET}"
 
 rclone copy "$LOCAL_DIR" "R2:${BUCKET}" \
   --config "$RCLONE_CONF" \
-  --include 'ledgerflow-*.db' \
-  --exclude '*' \
+  --filter '+ ledgerflow-*.db' --filter '- **' \
   --transfers 2 \
   --checkers 4 \
   --retries 3 \
@@ -42,8 +41,7 @@ rclone copy "$LOCAL_DIR" "R2:${BUCKET}" \
 echo "ledgerflow-r2-sync: applying remote retention (keep newest ${KEEP_REMOTE})"
 rclone delete "R2:${BUCKET}" \
   --config "$RCLONE_CONF" \
-  --include 'ledgerflow-*.db' \
-  --exclude '*' \
+  --filter '+ ledgerflow-*.db' --filter '- **' \
   --min-age "${KEEP_REMOTE}d" \
   --dry-run \
   --log-level INFO
@@ -51,8 +49,7 @@ rclone delete "R2:${BUCKET}" \
 # Only after a successful upload is pruning allowed to remove anything remote.
 rclone delete "R2:${BUCKET}" \
   --config "$RCLONE_CONF" \
-  --include 'ledgerflow-*.db' \
-  --exclude '*' \
+  --filter '+ ledgerflow-*.db' --filter '- **' \
   --min-age "${KEEP_REMOTE}d" \
   --log-level INFO
 
