@@ -43,44 +43,50 @@ const tempTarget = `${target}.partial`;
 console.log(`[backup] ${stamp()} snapshotting ${DB_PATH} -> ${target}`);
 
 let db;
-let backupDb;
 try {
   db = new Database(DB_PATH, { readonly: true, fileMustExist: true });
-  backupDb = new Database(tempTarget);
 
-  // The online backup API. `pagesPerStep` trades a little speed for a smaller
-  // working set, which matters on a 1 GB box.
-  await db.backup(backupDb, { pagesPerStep: 256 });
+  // The online backup API. The destination is a path; better-sqlite3 opens and
+  // populates the file itself. `pagesPerStep` trades a little speed for a
+  // smaller working set, which matters on a 1 GB box.
+  await db.backup(tempTarget, { pagesPerStep: 256 });
 
   // Verify before accepting. Reopening is the real test: it proves the file is
   // not truncated and that every page parses.
-  backupDb.close();
-  backupDb = new Database(tempTarget, { readonly: true, fileMustExist: true });
-
-  const integrity = backupDb.pragma('integrity_check', { simple: true });
-  if (integrity !== 'ok') die(`integrity_check returned "${integrity}"`);
-
-  const rowCount = backupDb.prepare('SELECT COUNT(*) AS n FROM users').get().n;
-  const companyCount = backupDb.prepare('SELECT COUNT(*) AS n FROM companies').get().n;
-  const voucherCount = backupDb.prepare('SELECT COUNT(*) AS n FROM transactions').get().n;
-
-  backupDb.close();
-  backupDb = undefined;
-
-  // Only now is the file allowed to take its final name.
-  fs.renameSync(tempTarget, target);
-
-  const sizeKb = Math.round(fs.statSync(target).size / 1024);
-  console.log(
-    `[backup] ${stamp()} ok: ${sizeKb} kB, integrity ok, ` +
-      `${rowCount} user(s), ${companyCount} company(ies), ${voucherCount} voucher(s)`,
-  );
-} catch (err) {
+  const check = new Database(tempTarget, { readonly: true, fileMustExist: true });
   try {
-    if (backupDb) backupDb.close();
-  } catch {
-    /* already closed */
+    const integrity = check.pragma('integrity_check', { simple: true });
+    if (integrity !== 'ok') die(`integrity_check returned "${integrity}"`);
+
+    const rowCount = check.prepare('SELECT COUNT(*) AS n FROM users').get().n;
+    const companyCount = check.prepare('SELECT COUNT(*) AS n FROM companies').get().n;
+    const voucherCount = check.prepare('SELECT COUNT(*) AS n FROM transactions').get().n;
+
+    // Only now is the file allowed to take its final name.
+    fs.renameSync(tempTarget, target);
+
+    const sizeKb = Math.round(fs.statSync(target).size / 1024);
+    console.log(
+      `[backup] ${stamp()} ok: ${sizeKb} kB, integrity ok, ` +
+        `${rowCount} user(s), ${companyCount} company(ies), ${voucherCount} voucher(s)`,
+    );
+  } finally {
+    check.close();
+    // Opening the snapshot read-only still creates -shm/-wal sidecars next to
+    // it. They are not part of the backup and would be uploaded to R2 as if
+    // they were, so they are cleared before the retention pass.
+    for (const suffix of ['-wal', '-shm']) {
+      const sidecar = `${tempTarget}${suffix}`;
+      if (fs.existsSync(sidecar)) {
+        try {
+          fs.unlinkSync(sidecar);
+        } catch {
+          /* best effort */
+        }
+      }
+    }
   }
+} catch (err) {
   try {
     if (fs.existsSync(tempTarget)) fs.unlinkSync(tempTarget);
   } catch {
